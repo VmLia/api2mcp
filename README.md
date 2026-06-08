@@ -93,14 +93,24 @@ python ../init_db.py
 python ../init_db.py --seed
 ```
 
-### 5. Start Services
+### 5. Start the Service
 
+#### Option 1: One-click Start on Mac
 ```bash
-# Development mode (real-time backend logs)
-./start.sh
+# Development mode (starts both frontend and backend, backend logs displayed in real-time)
+./start-mac.sh
+```
 
-# Or background mode
-./start.sh start-bg
+#### Option 2: Manual Command Start
+```bash
+# Backend (run in backend directory, backend logs displayed in real-time)
+cd api2mcp/backend
+source .venv/bin/activate
+uv run main.py --reload
+
+# Frontend (run in frontend directory)
+cd api2mcp/frontend
+npm run dev --port 34075 --host 0.0.0.0
 ```
 
 Open http://localhost:34075 in your browser
