@@ -1,0 +1,28 @@
+# API2MCP DB
+# Start: docker compose -f docker-compose-api2mcp.yaml up -d
+# Stop: docker compose -f docker-compose-api2mcp.yaml down
+
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.7.0-pg15
+    container_name: api2mcp-postgres
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-api2mcp}
+      POSTGRES_USER: ${DB_USER:-api2mcp}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-api2mcp@123}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-api2mcp} -d ${DB_NAME:-api2mcp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
