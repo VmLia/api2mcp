@@ -95,12 +95,21 @@ python ../init_db.py --seed
 
 ### 5. 启动服务
 
+#### 方式一：Macbook 一键启动服务
 ```bash
-# 开发模式（后端日志实时显示）
-./start.sh
+# 开发模式（同时启动前后端应用，后端日志实时显示）
+./start-mac.sh
+```
+#### 方式二：命令启动
+```bash
+# 开发模式（后端日志实时显示，在 backend 目录下执行即可）
+cd api2mcp/backend
+source .venv/bin/activate  
+uv run main.py --reload
 
-# 或后台模式
-./start.sh start-bg
+# 前端开发模式（在 frontend 目录下执行）
+cd api2mcp/frontend
+npm run dev --port 34075 --host 0.0.0.0
 ```
 
 在浏览器中打开 http://localhost:34075
