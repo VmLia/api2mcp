@@ -44,7 +44,7 @@ git clone https://github.com/VmLia/api2mcp.git
 cd api2mcp
 
 # 一键安装所有依赖（后端 + 前端）
-./start.sh setup
+./start-mac.sh setup
 ```
 
 ### 2. 安装数据库（可选）
@@ -58,6 +58,12 @@ docker compose -f docker-compose-api2mcp.yaml up -d
 ```
 
 ### 3. 配置初始化
+
+复制示例配置文件并修改数据库连接：
+
+```bash
+cp .env.example .env
+```
 
 编辑 `.env` 文件，配置数据库连接：
 
@@ -103,12 +109,12 @@ python ../init_db.py --seed
 #### 方式二：命令启动
 ```bash
 # 开发模式（后端日志实时显示，在 backend 目录下执行即可）
-cd api2mcp/backend
+cd backend
 source .venv/bin/activate  
-uv run main.py --reload
+uv run uvicorn main:app --host 0.0.0.0 --port 34085 --reload
 
 # 前端开发模式（在 frontend 目录下执行）
-cd api2mcp/frontend
+cd ../frontend
 npm run dev --port 34075 --host 0.0.0.0
 ```
 

@@ -284,10 +284,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { Plus, Setting, Delete, View, Files, InfoFilled, Monitor, More, Document } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useAPIProjectStore } from '@/stores/apiProject'
+import { useAPIToolStore } from '@/stores/apiProject'
 import Api2mcpDetail from './Api2mcpDetail.vue'
 
-const store = useAPIProjectStore()
+const store = useAPIToolStore()
 
 const searchQuery = ref('')
 const statusFilter = ref('')
@@ -303,23 +303,23 @@ const currentProject = ref<any>(null)
 const mcpBaseUrl = computed(() => store.mcpBaseUrl)
 
 const categories = computed(() => {
-  const cats = new Set(store.api2mcpProjects.map(p => p.category).filter(Boolean))
+  const cats = new Set(store.api2mcpTools.map(t => t.category).filter(Boolean))
   return Array.from(cats)
 })
 
 const filteredProjects = computed(() => {
-  let list = store.api2mcpProjects
+  let list = store.api2mcpTools
   if (statusFilter.value) {
-    list = list.filter(p => p.status === statusFilter.value)
+    list = list.filter(t => t.status === statusFilter.value)
   }
   if (categoryFilter.value) {
-    list = list.filter(p => p.category === categoryFilter.value)
+    list = list.filter(t => t.category === categoryFilter.value)
   }
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
-    list = list.filter(p =>
-      p.tool_name.toLowerCase().includes(q) ||
-      (p.tool_description || '').toLowerCase().includes(q)
+    list = list.filter(t =>
+      t.tool_name.toLowerCase().includes(q) ||
+      (t.tool_description || '').toLowerCase().includes(q)
     )
   }
   return list
@@ -377,8 +377,8 @@ const closeDetailDialog = () => {
 }
 
 const onProjectSaved = () => {
-  // Refresh project list
-  store.loadApi2mcpProjects()
+  // Refresh tool list
+  store.loadApi2mcpTools()
   closeDetailDialog()
 }
 
@@ -409,10 +409,10 @@ const copyToClipboard = async (text: string) => {
 const handleDelete = async (row: any) => {
   try {
     await ElMessageBox.confirm(`Are you sure you want to delete tool "${row.tool_name}"?`, 'Confirm Delete', { type: 'warning' })
-    await store.deleteApi2mcpProject(row.id)
+    await store.deleteApi2mcpTool(row.id)
     ElMessage.success('Deleted successfully')
     // Refresh list
-    store.loadApi2mcpProjects()
+    store.loadApi2mcpTools()
   } catch {
     // cancelled
   }
@@ -421,7 +421,7 @@ const handleDelete = async (row: any) => {
 const toggleStatus = async (row: any) => {
   try {
     const newStatus = row.status === 'active' ? 'inactive' : 'active'
-    await store.updateApi2mcpProject(row.id, { status: newStatus })
+    await store.updateApi2mcpTool(row.id, { status: newStatus })
     ElMessage.success(`Tool "${row.tool_name}" has been ${newStatus === 'active' ? 'activated' : 'deactivated'}`)
   } catch (e: any) {
     ElMessage.error(e.message || 'Operation failed')
@@ -429,7 +429,7 @@ const toggleStatus = async (row: any) => {
 }
 
 onMounted(() => {
-  store.loadApi2mcpProjects()
+  store.loadApi2mcpTools()
   store.loadServerInfo()
 })
 </script>

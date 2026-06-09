@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, delete, func
 
 from database import async_session_maker
-from api_info import Api2mcpProject, Api2mcpParameter, Api2mcpAuthConfig, Api2mcpEnvVariable
+from api_info import Api2mcpTool, Api2mcpParameter, Api2mcpAuthConfig, Api2mcpEnvVariable
 from config import settings
 
 router = APIRouter(prefix="/serverapi/apimng", tags=["API2MCP"])
@@ -51,6 +51,7 @@ class ProjectCreate(BaseModel):
     timeout_ms: int = 30000
     auth_config_id: Optional[str] = None
     transport_modes: List[str] = ["streamable_http"]  # Transport protocols, currently supports: streamable_http
+    status: str = "active"
 
 
 class ProjectUpdate(BaseModel):
@@ -112,7 +113,7 @@ class EnvVariableCreate(BaseModel):
     key: str
     value: str
     scope: str = "global"
-    project_id: Optional[str] = None
+    tool_id: Optional[str] = None
     description: Optional[str] = None
 
 
@@ -185,11 +186,11 @@ def _build_output_schema(output_fields: dict) -> dict:
     return {"type": "object", "properties": properties}
 
 
-def _build_tool_description(project: Api2mcpProject) -> str:
+def _build_tool_description(tool: Api2mcpTool) -> str:
     """Build tool description"""
-    description = project.tool_description or "API tool call"
-    if project.usage_examples:
-        examples = project.usage_examples.get("examples", [])
+    description = tool.tool_description or "API tool call"
+    if tool.usage_examples:
+        examples = tool.usage_examples.get("examples", [])
         if examples:
             description += "\n\nUsage Examples:\n"
             for i, example in enumerate(examples[:3], 1):
@@ -199,35 +200,35 @@ def _build_tool_description(project: Api2mcpProject) -> str:
     return description
 
 
-def _project_to_dict(project: Api2mcpProject) -> dict:
+def _tool_to_dict(tool: Api2mcpTool) -> dict:
     return {
-        "id": project.id,
-        "tool_name": project.tool_name,
-        "version": project.version,
-        "tool_description": project.tool_description,
-        "category": project.category,
-        "tags": project.tags,
-        "method": project.method,
-        "base_url": project.base_url,
-        "path": project.path,
-        "content_type": project.content_type,
-        "output_fields": project.output_fields,
-        "output_template": project.output_template,
-        "usage_examples": project.usage_examples,
-        "cache_ttl": project.cache_ttl,
-        "timeout_ms": project.timeout_ms,
-        "status": project.status,
-        "auth_config_id": project.auth_config_id,
-        "transport_modes": project.transport_modes or ["streamable_http"],
-        "created_at": project.created_at.isoformat() if project.created_at else None,
-        "updated_at": project.updated_at.isoformat() if project.updated_at else None,
+        "id": tool.id,
+        "tool_name": tool.tool_name,
+        "version": tool.version,
+        "tool_description": tool.tool_description,
+        "category": tool.category,
+        "tags": tool.tags,
+        "method": tool.method,
+        "base_url": tool.base_url,
+        "path": tool.path,
+        "content_type": tool.content_type,
+        "output_fields": tool.output_fields,
+        "output_template": tool.output_template,
+        "usage_examples": tool.usage_examples,
+        "cache_ttl": tool.cache_ttl,
+        "timeout_ms": tool.timeout_ms,
+        "status": tool.status,
+        "auth_config_id": tool.auth_config_id,
+        "transport_modes": tool.transport_modes or ["streamable_http"],
+        "created_at": tool.created_at.isoformat() if tool.created_at else None,
+        "updated_at": tool.updated_at.isoformat() if tool.updated_at else None,
     }
 
 
 def _parameter_to_dict(param: Api2mcpParameter) -> dict:
     return {
         "id": param.id,
-        "project_id": param.project_id,
+        "tool_id": param.tool_id,
         "parent_id": param.parent_id,
         "param_name": param.param_name,
         "param_location": param.param_location,
@@ -284,31 +285,31 @@ def _env_var_to_dict(var: Api2mcpEnvVariable) -> dict:
         "key": var.key,
         "value": "***" if var.value else "",
         "scope": var.scope,
-        "project_id": var.project_id,
+        "tool_id": var.tool_id,
         "description": var.description,
         "created_at": var.created_at.isoformat() if var.created_at else None,
     }
 
 
-# ── Project CRUD ──
+# ── Tool CRUD ──
 
-@router.post("/projects")
-async def create_project(data: ProjectCreate):
-    """Create API2MCP project"""
+@router.post("/tools")
+async def create_tool(data: ProjectCreate):
+    """Create API2MCP tool"""
     
     # Validate tool_name + version uniqueness (tool names can repeat, but not with the same version)
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(
-                Api2mcpProject.tool_name == data.tool_name,
-                Api2mcpProject.version == data.version
+            select(Api2mcpTool).where(
+                Api2mcpTool.tool_name == data.tool_name,
+                Api2mcpTool.version == data.version
             )
         )
         existing = result.scalar_one_or_none()
         if existing:
             raise HTTPException(status_code=409, detail=f"Tool name and version combination already exists: {data.tool_name}@{data.version}")
     
-    project_id = str(uuid.uuid4())
+    tool_id = str(uuid.uuid4())
     
     # Handle empty auth_config_id string, convert to None
     auth_config_id = data.auth_config_id if data.auth_config_id else None
@@ -316,8 +317,8 @@ async def create_project(data: ProjectCreate):
     # Handle transport protocols, ensure at least one
     transport_modes = data.transport_modes if data.transport_modes and len(data.transport_modes) > 0 else ["streamable_http"]
     
-    project = Api2mcpProject(
-        id=project_id,
+    tool = Api2mcpTool(
+        id=tool_id,
         tool_name=data.tool_name,
         version=data.version,
         tool_description=data.tool_description,
@@ -332,6 +333,7 @@ async def create_project(data: ProjectCreate):
         usage_examples=data.usage_examples,
         cache_ttl=data.cache_ttl,
         timeout_ms=data.timeout_ms,
+        status=data.status,
         auth_config_id=auth_config_id,
         transport_modes=transport_modes,
         created_by=DEFAULT_USER,
@@ -339,78 +341,78 @@ async def create_project(data: ProjectCreate):
     )
     
     async with async_session_maker() as session:
-        session.add(project)
+        session.add(tool)
         await session.commit()
     
-    return {"status": "ok", "project_id": project_id, "tool_name": data.tool_name, "version": data.version}
+    return {"status": "ok", "tool_id": tool_id, "tool_name": data.tool_name, "version": data.version}
 
 
-@router.get("/projects")
-async def list_projects(
+@router.get("/tools")
+async def list_tools(
     category: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
 ):
-    """List all API2MCP projects"""
+    """List all API2MCP tools"""
     async with async_session_maker() as session:
-        query = select(Api2mcpProject)
+        query = select(Api2mcpTool)
         if category:
-            query = query.where(Api2mcpProject.category == category)
+            query = query.where(Api2mcpTool.category == category)
         if status:
-            query = query.where(Api2mcpProject.status == status)
+            query = query.where(Api2mcpTool.status == status)
         if search:
-            query = query.where(Api2mcpProject.tool_name.ilike(f"%{search}%"))
-        query = query.order_by(Api2mcpProject.created_at.desc())
+            query = query.where(Api2mcpTool.tool_name.ilike(f"%{search}%"))
+        query = query.order_by(Api2mcpTool.created_at.desc())
         
         result = await session.execute(query)
-        projects = result.scalars().all()
+        tools = result.scalars().all()
         
-        return {"projects": [_project_to_dict(p) for p in projects]}
+        return {"tools": [_tool_to_dict(t) for t in tools]}
 
 
-@router.get("/projects/{project_id}")
-async def get_project(project_id: str):
-    """Get project detail"""
+@router.get("/tools/{tool_id}")
+async def get_tool(tool_id: str):
+    """Get tool detail"""
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(Api2mcpProject.id == project_id)
+            select(Api2mcpTool).where(Api2mcpTool.id == tool_id)
         )
-        project = result.scalar_one_or_none()
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        tool = result.scalar_one_or_none()
+        if not tool:
+            raise HTTPException(status_code=404, detail="Tool not found")
         
         result = await session.execute(
             select(Api2mcpParameter)
-            .where(Api2mcpParameter.project_id == project_id)
+            .where(Api2mcpParameter.tool_id == tool_id)
             .order_by(Api2mcpParameter.sort_order)
         )
         parameters = result.scalars().all()
         
-        project_dict = _project_to_dict(project)
-        project_dict["parameters"] = [_parameter_to_dict(p) for p in parameters]
+        tool_dict = _tool_to_dict(tool)
+        tool_dict["parameters"] = [_parameter_to_dict(p) for p in parameters]
         
-        return project_dict
+        return tool_dict
 
 
-@router.put("/projects/{project_id}")
-async def update_project(project_id: str, data: ProjectUpdate):
-    """Update project configuration"""
+@router.put("/tools/{tool_id}")
+async def update_tool(tool_id: str, data: ProjectUpdate):
+    """Update tool configuration"""
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(Api2mcpProject.id == project_id)
+            select(Api2mcpTool).where(Api2mcpTool.id == tool_id)
         )
-        project = result.scalar_one_or_none()
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        tool = result.scalar_one_or_none()
+        if not tool:
+            raise HTTPException(status_code=404, detail="Tool not found")
         
         # Validate tool_name + version uniqueness (if tool_name or version changed)
-        new_tool_name = data.tool_name if data.tool_name else project.tool_name
-        new_version = data.version if data.version else project.version
-        if new_tool_name != project.tool_name or new_version != project.version:
+        new_tool_name = data.tool_name if data.tool_name else tool.tool_name
+        new_version = data.version if data.version else tool.version
+        if new_tool_name != tool.tool_name or new_version != tool.version:
             result = await session.execute(
-                select(Api2mcpProject).where(
-                    Api2mcpProject.tool_name == new_tool_name,
-                    Api2mcpProject.version == new_version
+                select(Api2mcpTool).where(
+                    Api2mcpTool.tool_name == new_tool_name,
+                    Api2mcpTool.version == new_version
                 )
             )
             existing = result.scalar_one_or_none()
@@ -426,57 +428,57 @@ async def update_project(project_id: str, data: ProjectUpdate):
         for field in update_fields:
             value = getattr(data, field, None)
             if value is not None:
-                setattr(project, field, value)
+                setattr(tool, field, value)
         
         # Handle auth_config_id separately, empty string becomes None
         if hasattr(data, 'auth_config_id') and data.auth_config_id is not None:
-            project.auth_config_id = data.auth_config_id if data.auth_config_id else None
+            tool.auth_config_id = data.auth_config_id if data.auth_config_id else None
         
         # Handle transport protocols
         if hasattr(data, 'transport_modes') and data.transport_modes is not None:
             if data.transport_modes and len(data.transport_modes) > 0:
-                project.transport_modes = data.transport_modes
+                tool.transport_modes = data.transport_modes
             else:
-                project.transport_modes = ["streamable_http"]
+                tool.transport_modes = ["streamable_http"]
         
-        project.updated_by = DEFAULT_USER
+        tool.updated_by = DEFAULT_USER
         await session.commit()
     
     return {"status": "ok"}
 
 
-@router.delete("/projects/{project_id}")
-async def delete_project(project_id: str):
-    """Delete project and all its parameters, stop MCP Server"""
+@router.delete("/tools/{tool_id}")
+async def delete_tool(tool_id: str):
+    """Delete tool and all its parameters, stop MCP Server"""
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(Api2mcpProject.id == project_id)
+            select(Api2mcpTool).where(Api2mcpTool.id == tool_id)
         )
-        project = result.scalar_one_or_none()
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        tool = result.scalar_one_or_none()
+        if not tool:
+            raise HTTPException(status_code=404, detail="Tool not found")
         
-        tool_name = project.tool_name
+        tool_name = tool.tool_name
         
         await session.execute(
-            delete(Api2mcpParameter).where(Api2mcpParameter.project_id == project_id)
+            delete(Api2mcpParameter).where(Api2mcpParameter.tool_id == tool_id)
         )
         
-        await session.delete(project)
+        await session.delete(tool)
         await session.commit()
     
-    return {"status": "ok", "project_id": project_id}
+    return {"status": "ok", "tool_id": tool_id}
 
 
 # ── Parameter Management ──
 
-@router.get("/projects/{project_id}/parameters")
-async def list_parameters(project_id: str):
-    """Get all parameters for project (tree structure)"""
+@router.get("/tools/{tool_id}/parameters")
+async def list_parameters(tool_id: str):
+    """Get all parameters for tool (tree structure)"""
     async with async_session_maker() as session:
         result = await session.execute(
             select(Api2mcpParameter)
-            .where(Api2mcpParameter.project_id == project_id)
+            .where(Api2mcpParameter.tool_id == tool_id)
             .order_by(Api2mcpParameter.sort_order)
         )
         parameters = result.scalars().all()
@@ -484,19 +486,19 @@ async def list_parameters(project_id: str):
         return {"parameters": _build_parameter_tree(parameters)}
 
 
-@router.post("/projects/{project_id}/parameters")
-async def create_parameter(project_id: str, data: ParameterCreate):
+@router.post("/tools/{tool_id}/parameters")
+async def create_parameter(tool_id: str, data: ParameterCreate):
     """Create parameter"""
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(Api2mcpProject.id == project_id)
+            select(Api2mcpTool).where(Api2mcpTool.id == tool_id)
         )
         if not result.scalar_one_or_none():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="Tool not found")
         
         param = Api2mcpParameter(
             id=str(uuid.uuid4()),
-            project_id=project_id,
+            tool_id=tool_id,
             parent_id=data.parent_id,
             param_name=data.param_name,
             param_location=data.param_location,
@@ -517,14 +519,14 @@ async def create_parameter(project_id: str, data: ParameterCreate):
     return {"status": "ok", "parameter_id": param.id}
 
 
-@router.put("/projects/{project_id}/parameters/{param_id}")
-async def update_parameter(project_id: str, param_id: str, data: ParameterUpdate):
+@router.put("/tools/{tool_id}/parameters/{param_id}")
+async def update_parameter(tool_id: str, param_id: str, data: ParameterUpdate):
     """Update parameter"""
     async with async_session_maker() as session:
         result = await session.execute(
             select(Api2mcpParameter)
             .where(Api2mcpParameter.id == param_id)
-            .where(Api2mcpParameter.project_id == project_id)
+            .where(Api2mcpParameter.tool_id == tool_id)
         )
         param = result.scalar_one_or_none()
         if not param:
@@ -545,14 +547,14 @@ async def update_parameter(project_id: str, param_id: str, data: ParameterUpdate
     return {"status": "ok"}
 
 
-@router.delete("/projects/{project_id}/parameters/{param_id}")
-async def delete_parameter(project_id: str, param_id: str):
+@router.delete("/tools/{tool_id}/parameters/{param_id}")
+async def delete_parameter(tool_id: str, param_id: str):
     """Delete parameter (cascading delete child parameters)"""
     async with async_session_maker() as session:
         result = await session.execute(
             select(Api2mcpParameter)
             .where(Api2mcpParameter.id == param_id)
-            .where(Api2mcpParameter.project_id == project_id)
+            .where(Api2mcpParameter.tool_id == tool_id)
         )
         param = result.scalar_one_or_none()
         if not param:
@@ -610,12 +612,12 @@ async def delete_auth_config(config_id: str):
             raise HTTPException(status_code=404, detail="Auth config not found")
         
         result = await session.execute(
-            select(func.count()).select_from(Api2mcpProject)
-            .where(Api2mcpProject.auth_config_id == config_id)
+            select(func.count()).select_from(Api2mcpTool)
+            .where(Api2mcpTool.auth_config_id == config_id)
         )
         count = result.scalar_one()
         if count > 0:
-            raise HTTPException(status_code=400, detail="This configuration is being used by projects and cannot be deleted")
+            raise HTTPException(status_code=400, detail="This configuration is being used by tools and cannot be deleted")
         
         await session.delete(config)
         await session.commit()
@@ -640,7 +642,7 @@ async def create_env_variable(data: EnvVariableCreate):
             key=data.key,
             value=data.value,
             scope=data.scope,
-            project_id=data.project_id,
+            tool_id=data.tool_id,
             description=data.description,
             created_by=DEFAULT_USER,
         )
@@ -654,17 +656,17 @@ async def create_env_variable(data: EnvVariableCreate):
 @router.get("/env-variables")
 async def list_env_variables(
     scope: Optional[str] = Query(None),
-    project_id: Optional[str] = Query(None),
+    tool_id: Optional[str] = Query(None),
 ):
     """List environment variables"""
     async with async_session_maker() as session:
         query = select(Api2mcpEnvVariable)
         if scope:
             query = query.where(Api2mcpEnvVariable.scope == scope)
-        if project_id:
+        if tool_id:
             query = query.where(
                 (Api2mcpEnvVariable.scope == "global") |
-                (Api2mcpEnvVariable.project_id == project_id)
+                (Api2mcpEnvVariable.tool_id == tool_id)
             )
         
         result = await session.execute(query)
@@ -692,46 +694,46 @@ async def delete_env_variable(var_id: str):
 
 # ── MCP Tool Generation and Preview ──
 
-@router.get("/projects/{project_id}/mcp-definition")
-async def get_mcp_definition(project_id: str):
-    """Get MCP definition preview for project"""
+@router.get("/tools/{tool_id}/mcp-definition")
+async def get_mcp_definition(tool_id: str):
+    """Get MCP definition preview for tool"""
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(Api2mcpProject.id == project_id)
+            select(Api2mcpTool).where(Api2mcpTool.id == tool_id)
         )
-        project = result.scalar_one_or_none()
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        tool = result.scalar_one_or_none()
+        if not tool:
+            raise HTTPException(status_code=404, detail="Tool not found")
         
         result = await session.execute(
-            select(Api2mcpParameter).where(Api2mcpParameter.project_id == project_id)
+            select(Api2mcpParameter).where(Api2mcpParameter.tool_id == tool_id)
         )
         parameters = result.scalars().all()
         
         input_schema = _build_input_schema(list(parameters))
-        output_schema = _build_output_schema(project.output_fields)
-        description = _build_tool_description(project)
+        output_schema = _build_output_schema(tool.output_fields)
+        description = _build_tool_description(tool)
         
         return {
-            "name": project.tool_name,
+            "name": tool.tool_name,
             "description": description,
             "inputSchema": input_schema,
             "outputSchema": output_schema,
-            "transportModes": project.transport_modes or ["streamable_http"],
+            "transportModes": tool.transport_modes or ["streamable_http"],
         }
 
 
-@router.post("/projects/{project_id}/register-mcp")
-async def register_project_to_mcp(project_id: str):
-    """Manually trigger project registration to MCP"""
+@router.post("/tools/{tool_id}/register-mcp")
+async def register_tool_to_mcp(tool_id: str):
+    """Manually trigger tool registration to MCP"""
     # Simplified handling here, actual registration logic requires MCP service support
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(Api2mcpProject.id == project_id)
+            select(Api2mcpTool).where(Api2mcpTool.id == tool_id)
         )
-        project = result.scalar_one_or_none()
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        tool = result.scalar_one_or_none()
+        if not tool:
+            raise HTTPException(status_code=404, detail="Tool not found")
     
     return {"status": "ok", "message": "Registered to MCP"}
 

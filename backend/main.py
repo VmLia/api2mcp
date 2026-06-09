@@ -102,8 +102,9 @@ async def health_check():
 # Frontend build directory
 frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
 
-# Mount frontend static files (all /frontrouter/assets/* requests return static files directly)
-app.mount("/frontrouter/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
+# Mount frontend static files only if dist directory exists
+if (frontend_dist / "assets").exists():
+    app.mount("/frontrouter/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
 
 # ── Vue Router History Mode Support ──
 
@@ -129,8 +130,9 @@ async def catch_all(full_path: str):
     
     return {"error": "Not found"}, 404
 
-# Register catch_all route, placed last
-app.router.routes.append(APIRoute("/{full_path:path}", endpoint=catch_all, methods=["GET"]))
+# Register catch_all route only if frontend dist exists
+if frontend_dist.exists():
+    app.router.routes.append(APIRoute("/{full_path:path}", endpoint=catch_all, methods=["GET"]))
 
 
 if __name__ == "__main__":

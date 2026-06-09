@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from database import async_session_maker
-from api_info import Api2mcpProject, Api2mcpParameter, Api2mcpAuthConfig, Api2mcpEnvVariable
+from api_info import Api2mcpTool, Api2mcpParameter, Api2mcpAuthConfig, Api2mcpEnvVariable
 from config import settings
 
 router = APIRouter(prefix="/mcpapi", tags=["MCP Server"])
@@ -101,17 +101,17 @@ class AgentInfoResponse(BaseModel):
 
 # ── Helper Functions ──
 
-async def _resolve_env_variables(value: str, project_id: Optional[str] = None) -> str:
+async def _resolve_env_variables(value: str, tool_id: Optional[str] = None) -> str:
     """Resolve environment variable references, e.g., {{API_KEY}}"""
     if not value or "{{" not in value:
         return value
     
     async with async_session_maker() as session:
         query = select(Api2mcpEnvVariable)
-        if project_id:
+        if tool_id:
             query = query.where(
                 (Api2mcpEnvVariable.scope == "global") |
-                (Api2mcpEnvVariable.project_id == project_id)
+                (Api2mcpEnvVariable.tool_id == tool_id)
             )
         else:
             query = query.where(Api2mcpEnvVariable.scope == "global")
@@ -128,7 +128,7 @@ async def _resolve_env_variables(value: str, project_id: Optional[str] = None) -
     return result
 
 
-async def _build_request_url(project: Api2mcpProject, arguments: Dict[str, Any]) -> str:
+async def _build_request_url(project: Api2mcpTool, arguments: Dict[str, Any]) -> str:
     """Build request URL (handle path parameters)"""
     # Check if base_url is configured
     if not project.base_url or not project.base_url.strip():
@@ -151,7 +151,7 @@ async def _build_request_url(project: Api2mcpProject, arguments: Dict[str, Any])
     return url
 
 
-async def _build_request_headers(project: Api2mcpProject) -> Dict[str, str]:
+async def _build_request_headers(project: Api2mcpTool) -> Dict[str, str]:
     """Build request headers"""
     headers = {
         "Content-Type": project.content_type,
@@ -210,11 +210,11 @@ async def _extract_params_by_location(
     return result
 
 
-async def _execute_api_call(project: Api2mcpProject, arguments: Dict[str, Any]) -> Dict[str, Any]:
+async def _execute_api_call(project: Api2mcpTool, arguments: Dict[str, Any]) -> Dict[str, Any]:
     """Execute actual API call"""
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpParameter).where(Api2mcpParameter.project_id == project.id)
+            select(Api2mcpParameter).where(Api2mcpParameter.tool_id == project.id)
         )
         parameters = result.scalars().all()
     
@@ -296,19 +296,19 @@ def _apply_output_template(data: Dict[str, Any], template: Optional[str]) -> Any
         return {"error": f"JMESPath parsing failed: {str(e)}", "original_data": data}
 
 
-async def _get_project_tools(project_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Get all active tool definitions for project (JSON-RPC format)"""
+async def _get_tools(tool_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Get all active tool definitions (JSON-RPC format)"""
     async with async_session_maker() as session:
-        query = select(Api2mcpProject).where(Api2mcpProject.status == "active")
-        if project_id:
-            query = query.where(Api2mcpProject.id == project_id)
+        query = select(Api2mcpTool).where(Api2mcpTool.status == "active")
+        if tool_id:
+            query = query.where(Api2mcpTool.id == tool_id)
         result = await session.execute(query)
-        projects = result.scalars().all()
+        tools_from_db = result.scalars().all()
         
         tools = []
-        for project in projects:
+        for tool in tools_from_db:
             param_result = await session.execute(
-                select(Api2mcpParameter).where(Api2mcpParameter.project_id == project.id)
+                select(Api2mcpParameter).where(Api2mcpParameter.tool_id == tool.id)
             )
             parameters = param_result.scalars().all()
             
@@ -333,11 +333,11 @@ async def _get_project_tools(project_id: Optional[str] = None) -> List[Dict[str,
                 input_schema["required"] = required
             
             # Build full tool name: tool_name@version
-            full_tool_name = f"{project.tool_name}@{project.version}"
+            full_tool_name = f"{tool.tool_name}@{tool.version}"
             
             tools.append({
                 "name": full_tool_name,
-                "description": project.tool_description or f"Call {project.method} {project.path}",
+                "description": tool.tool_description or f"Call {tool.method} {tool.path}",
                 "inputSchema": input_schema,
             })
         
@@ -360,7 +360,7 @@ def _make_jsonrpc_error(id: Any, code: int, message: str, data: Any = None) -> D
 async def _handle_jsonrpc_method(
     method: str,
     params: Optional[Dict[str, Any]],
-    project_id: Optional[str] = None
+    tool_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Handle JSON-RPC method call"""
     
@@ -380,7 +380,7 @@ async def _handle_jsonrpc_method(
         return {}
     
     elif method == "tools/list":
-        tools = await _get_project_tools(project_id)
+        tools = await _get_tools(tool_id)
         return {"tools": tools}
     
     elif method == "tools/call":
@@ -399,35 +399,35 @@ async def _handle_jsonrpc_method(
             version = parts[1]
         
         async with async_session_maker() as session:
-            query = select(Api2mcpProject).where(
-                Api2mcpProject.tool_name == tool_name,
-                Api2mcpProject.status == "active"
+            query = select(Api2mcpTool).where(
+                Api2mcpTool.tool_name == tool_name,
+                Api2mcpTool.status == "active"
             )
             if version:
-                query = query.where(Api2mcpProject.version == version)
-            if project_id:
-                query = query.where(Api2mcpProject.id == project_id)
+                query = query.where(Api2mcpTool.version == version)
+            if tool_id:
+                query = query.where(Api2mcpTool.id == tool_id)
             
             result = await session.execute(query)
-            project = result.scalar_one_or_none()
+            tool = result.scalar_one_or_none()
             
-            if not project:
+            if not tool:
                 return {
                     "content": [{"type": "text", "text": f"Tool not found or not enabled: {full_tool_name}"}],
                     "isError": True,
                 }
             
             try:
-                raw_response = await _execute_api_call(project, arguments)
+                raw_response = await _execute_api_call(tool, arguments)
                 
-                if project.output_template:
-                    processed = _apply_output_template(raw_response, project.output_template)
+                if tool.output_template:
+                    processed = _apply_output_template(raw_response, tool.output_template)
                 else:
                     processed = raw_response
                 
-                if project.output_fields:
+                if tool.output_fields:
                     filtered = {}
-                    for field_name, field_config in project.output_fields.items():
+                    for field_name, field_config in tool.output_fields.items():
                         if field_name in processed:
                             filtered[field_name] = processed[field_name]
                     processed = filtered
@@ -454,7 +454,7 @@ async def _handle_jsonrpc_method(
 
 async def _process_jsonrpc_request(
     body: Dict[str, Any],
-    project_id: Optional[str] = None
+    tool_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Process single JSON-RPC request"""
     request_id = body.get("id")
@@ -462,7 +462,7 @@ async def _process_jsonrpc_request(
     params = body.get("params")
     
     try:
-        result = await _handle_jsonrpc_method(method, params, project_id)
+        result = await _handle_jsonrpc_method(method, params, tool_id)
         # notifications don't require response
         if method.startswith("notifications/"):
             return None
@@ -475,12 +475,12 @@ async def _process_jsonrpc_request(
 
 # ── Core MCP Server Endpoints (referenced anythingmcp architecture) ──
 
-async def _resolve_project(identifier: str) -> Api2mcpProject:
+async def _resolve_project(identifier: str) -> Api2mcpTool:
     """Resolve project by UUID or tool_name, priority to UUID"""
     async with async_session_maker() as session:
         # First try by UUID
         result = await session.execute(
-            select(Api2mcpProject).where(Api2mcpProject.id == identifier)
+            select(Api2mcpTool).where(Api2mcpTool.id == identifier)
         )
         project = result.scalar_one_or_none()
         if project:
@@ -488,10 +488,10 @@ async def _resolve_project(identifier: str) -> Api2mcpProject:
         
         # Then try by tool_name (compatible with older versions, default to v1)
         result = await session.execute(
-            select(Api2mcpProject).where(
-                Api2mcpProject.tool_name == identifier,
-                Api2mcpProject.version == "v1",
-                Api2mcpProject.status == "active"
+            select(Api2mcpTool).where(
+                Api2mcpTool.tool_name == identifier,
+                Api2mcpTool.version == "v1",
+                Api2mcpTool.status == "active"
             )
         )
         project = result.scalar_one_or_none()
@@ -500,10 +500,10 @@ async def _resolve_project(identifier: str) -> Api2mcpProject:
         
         # If v1 not found, try to find the first matching tool_name
         result = await session.execute(
-            select(Api2mcpProject).where(
-                Api2mcpProject.tool_name == identifier,
-                Api2mcpProject.status == "active"
-            ).order_by(Api2mcpProject.version)
+            select(Api2mcpTool).where(
+                Api2mcpTool.tool_name == identifier,
+                Api2mcpTool.status == "active"
+            ).order_by(Api2mcpTool.version)
         )
         project = result.scalar_one_or_none()
         if project:
@@ -512,14 +512,14 @@ async def _resolve_project(identifier: str) -> Api2mcpProject:
         raise HTTPException(status_code=404, detail=f"Project not found: {identifier}")
 
 
-async def _resolve_project_with_version(tool_name: str, version: str) -> Api2mcpProject:
+async def _resolve_project_with_version(tool_name: str, version: str) -> Api2mcpTool:
     """Resolve project by tool_name + version"""
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(
-                Api2mcpProject.tool_name == tool_name,
-                Api2mcpProject.version == version,
-                Api2mcpProject.status == "active"
+            select(Api2mcpTool).where(
+                Api2mcpTool.tool_name == tool_name,
+                Api2mcpTool.version == version,
+                Api2mcpTool.status == "active"
             )
         )
         project = result.scalar_one_or_none()
@@ -579,7 +579,7 @@ async def mcp_root_jsonrpc(request: Request):
             responses.append(_make_jsonrpc_error(req_body.get("id"), -32600, "Invalid Request"))
             continue
         
-        resp = await _process_jsonrpc_request(req_body)  # Don't pass project_id, query all projects
+        resp = await _process_jsonrpc_request(req_body)  # Don't pass tool_id, query all tools
         if resp is not None:
             responses.append(resp)
     
@@ -736,14 +736,14 @@ async def list_tools():
     """MCP Protocol: List all available tools"""
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(Api2mcpProject.status == "active")
+            select(Api2mcpTool).where(Api2mcpTool.status == "active")
         )
         projects = result.scalars().all()
         
         tools = []
         for project in projects:
             result = await session.execute(
-                select(Api2mcpParameter).where(Api2mcpParameter.project_id == project.id)
+                select(Api2mcpParameter).where(Api2mcpParameter.tool_id == project.id)
             )
             parameters = result.scalars().all()
             
@@ -807,9 +807,9 @@ async def invoke_tool(request: ToolCallRequest):
     """MCP Protocol: Invoke specified tool"""
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(
-                Api2mcpProject.tool_name == request.tool_name,
-                Api2mcpProject.status == "active"
+            select(Api2mcpTool).where(
+                Api2mcpTool.tool_name == request.tool_name,
+                Api2mcpTool.status == "active"
             )
         )
         project = result.scalar_one_or_none()
@@ -856,7 +856,7 @@ async def get_tool_info(tool_name: str):
     """Get detailed information for a single tool"""
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(Api2mcpProject.tool_name == tool_name)
+            select(Api2mcpTool).where(Api2mcpTool.tool_name == tool_name)
         )
         project = result.scalar_one_or_none()
         
@@ -864,7 +864,7 @@ async def get_tool_info(tool_name: str):
             raise HTTPException(status_code=404, detail=f"Tool not found: {tool_name}")
         
         result = await session.execute(
-            select(Api2mcpParameter).where(Api2mcpParameter.project_id == project.id)
+            select(Api2mcpParameter).where(Api2mcpParameter.tool_id == project.id)
         )
         parameters = result.scalars().all()
         
@@ -907,7 +907,7 @@ async def test_tool(tool_name: str, arguments: Dict[str, Any]):
     """Test tool invocation (with detailed debug info)"""
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Api2mcpProject).where(Api2mcpProject.tool_name == tool_name)
+            select(Api2mcpTool).where(Api2mcpTool.tool_name == tool_name)
         )
         project = result.scalar_one_or_none()
         

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-export interface Api2mcpProject {
+export interface Api2mcpTool {
   id: string
   tool_name: string
   version: string
@@ -26,7 +26,7 @@ export interface Api2mcpProject {
 
 export interface Api2mcpParameter {
   id: string
-  project_id: string
+  tool_id: string
   parent_id: string | null
   param_name: string
   param_location: 'query' | 'path' | 'body' | 'header'
@@ -55,9 +55,9 @@ export interface SemanticTag {
   label: string
 }
 
-export const useAPIProjectStore = defineStore('apiProject', () => {
-  const api2mcpProjects = ref<Api2mcpProject[]>([])
-  const currentApi2mcpProject = ref<Api2mcpProject | null>(null)
+export const useAPIToolStore = defineStore('apiTool', () => {
+  const api2mcpTools = ref<Api2mcpTool[]>([])
+  const currentApi2mcpTool = ref<Api2mcpTool | null>(null)
   const api2mcpParameters = ref<Api2mcpParameter[]>([])
   const authConfigs = ref<Api2mcpAuthConfig[]>([])
   const semanticTags = ref<SemanticTag[]>([])
@@ -75,7 +75,7 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
     }
   }
 
-  async function loadApi2mcpProjects(params?: { category?: string; status?: string; search?: string }) {
+  async function loadApi2mcpTools(params?: { category?: string; status?: string; search?: string }) {
     isLoading.value = true
     error.value = null
     try {
@@ -83,27 +83,27 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
       if (params?.category) query.append('category', params.category)
       if (params?.status) query.append('status', params.status)
       if (params?.search) query.append('search', params.search)
-      const response = await fetch(`/serverapi/apimng/projects?${query.toString()}`)
+      const response = await fetch(`/serverapi/apimng/tools?${query.toString()}`)
       const result = await response.json()
-      api2mcpProjects.value = result.projects || []
+      api2mcpTools.value = result.tools || []
     } catch (e) {
-      error.value = 'Failed to load project list'
+      error.value = 'Failed to load tool list'
       console.error(e)
     } finally {
       isLoading.value = false
     }
   }
 
-  async function loadApi2mcpProject(projectId: string) {
+  async function loadApi2mcpTool(toolId: string) {
     isLoading.value = true
     error.value = null
     try {
-      const response = await fetch(`/serverapi/apimng/projects/${projectId}`)
-      if (!response.ok) throw new Error('Project not found')
-      currentApi2mcpProject.value = await response.json()
-      return currentApi2mcpProject.value
+      const response = await fetch(`/serverapi/apimng/tools/${toolId}`)
+      if (!response.ok) throw new Error('Tool not found')
+      currentApi2mcpTool.value = await response.json()
+      return currentApi2mcpTool.value
     } catch (e: any) {
-      error.value = e.message || 'Failed to load project details'
+      error.value = e.message || 'Failed to load tool details'
       console.error(e)
       return null
     } finally {
@@ -111,19 +111,19 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
     }
   }
 
-  async function createApi2mcpProject(data: Partial<Api2mcpProject>) {
+  async function createApi2mcpTool(data: Partial<Api2mcpTool>) {
     isLoading.value = true
     error.value = null
     try {
-      const response = await fetch('/serverapi/apimng/projects', {
+      const response = await fetch('/serverapi/apimng/tools', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Creation failed')
-      await loadApi2mcpProjects()
-      return result.project_id
+      await loadApi2mcpTools()
+      return result.tool_id
     } catch (e: any) {
       error.value = e.message
       throw e
@@ -132,11 +132,11 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
     }
   }
 
-  async function updateApi2mcpProject(projectId: string, data: Partial<Api2mcpProject>) {
+  async function updateApi2mcpTool(toolId: string, data: Partial<Api2mcpTool>) {
     isLoading.value = true
     error.value = null
     try {
-      const response = await fetch(`/serverapi/apimng/projects/${projectId}`, {
+      const response = await fetch(`/serverapi/apimng/tools/${toolId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -145,7 +145,7 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
         const result = await response.json()
         throw new Error(result.detail || 'Update failed')
       }
-      await loadApi2mcpProjects()
+      await loadApi2mcpTools()
       return { status: 'ok' }
     } catch (e: any) {
       error.value = e.message
@@ -155,16 +155,16 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
     }
   }
 
-  async function deleteApi2mcpProject(projectId: string) {
+  async function deleteApi2mcpTool(toolId: string) {
     isLoading.value = true
     error.value = null
     try {
-      const response = await fetch(`/serverapi/apimng/projects/${projectId}`, { method: 'DELETE' })
+      const response = await fetch(`/serverapi/apimng/tools/${toolId}`, { method: 'DELETE' })
       if (!response.ok) {
         const result = await response.json()
         throw new Error(result.detail || 'Deletion failed')
       }
-      await loadApi2mcpProjects()
+      await loadApi2mcpTools()
       return { status: 'ok' }
     } catch (e: any) {
       error.value = e.message
@@ -174,9 +174,9 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
     }
   }
 
-  async function loadApi2mcpParameters(projectId: string) {
+  async function loadApi2mcpParameters(toolId: string) {
     try {
-      const response = await fetch(`/serverapi/apimng/projects/${projectId}/parameters`)
+      const response = await fetch(`/serverapi/apimng/tools/${toolId}/parameters`)
       const result = await response.json()
       api2mcpParameters.value = result.parameters || []
       return api2mcpParameters.value
@@ -186,18 +186,18 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
     }
   }
 
-  async function createApi2mcpParameter(projectId: string, data: Partial<Api2mcpParameter>) {
+  async function createApi2mcpParameter(toolId: string, data: Partial<Api2mcpParameter>) {
     isLoading.value = true
     error.value = null
     try {
-      const response = await fetch(`/serverapi/apimng/projects/${projectId}/parameters`, {
+      const response = await fetch(`/serverapi/apimng/tools/${toolId}/parameters`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Creation failed')
-      await loadApi2mcpParameters(projectId)
+      await loadApi2mcpParameters(toolId)
       return result.parameter_id
     } catch (e: any) {
       error.value = e.message
@@ -207,11 +207,11 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
     }
   }
 
-  async function updateApi2mcpParameter(projectId: string, paramId: string, data: Partial<Api2mcpParameter>) {
+  async function updateApi2mcpParameter(toolId: string, paramId: string, data: Partial<Api2mcpParameter>) {
     isLoading.value = true
     error.value = null
     try {
-      const response = await fetch(`/serverapi/apimng/projects/${projectId}/parameters/${paramId}`, {
+      const response = await fetch(`/serverapi/apimng/tools/${toolId}/parameters/${paramId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -220,7 +220,7 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
         const result = await response.json()
         throw new Error(result.detail || 'Update failed')
       }
-      await loadApi2mcpParameters(projectId)
+      await loadApi2mcpParameters(toolId)
       return { status: 'ok' }
     } catch (e: any) {
       error.value = e.message
@@ -230,18 +230,18 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
     }
   }
 
-  async function deleteApi2mcpParameter(projectId: string, paramId: string) {
+  async function deleteApi2mcpParameter(toolId: string, paramId: string) {
     isLoading.value = true
     error.value = null
     try {
-      const response = await fetch(`/serverapi/apimng/projects/${projectId}/parameters/${paramId}`, {
+      const response = await fetch(`/serverapi/apimng/tools/${toolId}/parameters/${paramId}`, {
         method: 'DELETE'
       })
       if (!response.ok) {
         const result = await response.json()
         throw new Error(result.detail || 'Deletion failed')
       }
-      await loadApi2mcpParameters(projectId)
+      await loadApi2mcpParameters(toolId)
       return { status: 'ok' }
     } catch (e: any) {
       error.value = e.message
@@ -263,9 +263,9 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
     }
   }
 
-  async function getMcpDefinition(projectId: string) {
+  async function getMcpDefinition(toolId: string) {
     try {
-      const response = await fetch(`/serverapi/apimng/projects/${projectId}/mcp-definition`)
+      const response = await fetch(`/serverapi/apimng/tools/${toolId}/mcp-definition`)
       if (!response.ok) throw new Error('Failed to get MCP definition')
       return await response.json()
     } catch (e) {
@@ -274,11 +274,11 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
     }
   }
 
-  async function registerToMcp(projectId: string) {
+  async function registerToMcp(toolId: string) {
     isLoading.value = true
     error.value = null
     try {
-      const response = await fetch(`/serverapi/apimng/projects/${projectId}/register-mcp`, {
+      const response = await fetch(`/serverapi/apimng/tools/${toolId}/register-mcp`, {
         method: 'POST'
       })
       const result = await response.json()
@@ -305,8 +305,8 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
   }
 
   return {
-    api2mcpProjects,
-    currentApi2mcpProject,
+    api2mcpTools,
+    currentApi2mcpTool,
     api2mcpParameters,
     authConfigs,
     semanticTags,
@@ -315,11 +315,11 @@ export const useAPIProjectStore = defineStore('apiProject', () => {
     error,
     
     loadServerInfo,
-    loadApi2mcpProjects,
-    loadApi2mcpProject,
-    createApi2mcpProject,
-    updateApi2mcpProject,
-    deleteApi2mcpProject,
+    loadApi2mcpTools,
+    loadApi2mcpTool,
+    createApi2mcpTool,
+    updateApi2mcpTool,
+    deleteApi2mcpTool,
     
     loadApi2mcpParameters,
     createApi2mcpParameter,

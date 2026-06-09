@@ -16,13 +16,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
 from sqlalchemy import text
 
-from database import engine, async_session_maker
-from models import Base
+from database import engine, async_session_maker, Base
+from api_info import Api2mcpTool, Api2mcpParameter, Api2mcpAuthConfig, Api2mcpEnvVariable
 
 
 # Expected table names list
 EXPECTED_TABLES = [
-    'api2mcp_projects',
+    'api2mcp_tools',
     'api2mcp_parameters',
     'api2mcp_auth_config',
     'api2mcp_env_variables',
@@ -49,8 +49,35 @@ async def get_table_columns(table_name: str) -> dict:
         return {row[0]: row[1] for row in result}
 
 
+async def migrate_old_schema():
+    """Migrate from old schema (api2mcp_projects -> api2mcp_tools)"""
+    async with engine.connect() as conn:
+        existing = await get_existing_tables()
+
+        # Drop old api2mcp_projects table if exists (from old version)
+        if 'api2mcp_projects' in existing:
+            print("  Migrating: dropping old api2mcp_projects table...")
+            await conn.execute(text("DROP TABLE IF EXISTS api2mcp_projects CASCADE"))
+            await conn.commit()
+            print("  ✓ api2mcp_projects dropped")
+
+        # Recreate parameters table if it has wrong schema (project_id instead of tool_id)
+        if 'api2mcp_parameters' in existing:
+            columns = await get_table_columns('api2mcp_parameters')
+            if 'project_id' in columns and 'tool_id' not in columns:
+                print("  Migrating: recreating api2mcp_parameters with correct schema...")
+                await conn.execute(text("DROP TABLE IF EXISTS api2mcp_parameters CASCADE"))
+                await conn.commit()
+                async with engine.begin() as c:
+                    await c.run_sync(Base.metadata.create_all)
+                print("  ✓ api2mcp_parameters recreated")
+
+
 async def create_tables():
     """Create all missing tables"""
+    # First migrate incompatible schema
+    await migrate_old_schema()
+
     existing = await get_existing_tables()
     missing = [t for t in EXPECTED_TABLES if t not in existing]
 
@@ -84,16 +111,15 @@ async def seed_sample_data():
     """Import sample data (optional)"""
     print("\n[3/3] Importing sample data...")
 
-    from models import Api2mcpProject, Api2mcpParameter, Api2mcpAuthConfig, Api2mcpEnvVariable
     import uuid
 
     async with async_session_maker() as session:
         # Check if data already exists
-        result = await session.execute(text("SELECT COUNT(*) FROM api2mcp_projects"))
-        project_count = result.scalar()
+        result = await session.execute(text("SELECT COUNT(*) FROM api2mcp_tools"))
+        tool_count = result.scalar()
 
-        if project_count > 0:
-            print(f"  {project_count} projects already exist, skipping sample data import")
+        if tool_count > 0:
+            print(f"  {tool_count} tools already exist, skipping sample data import")
             print("  Tip: Use --reset parameter to clear and re-import")
             return
 
@@ -139,8 +165,8 @@ async def seed_sample_data():
         for var in env_vars:
             session.add(var)
 
-        # Create sample projects
-        sample_projects = [
+        # Create sample tools
+        sample_tools = [
             {
                 "tool_name": "search_projects",
                 "tool_description": "Search project list, supports filtering by keyword, status, budget range, etc.",
@@ -177,25 +203,25 @@ async def seed_sample_data():
             },
         ]
 
-        for project_data in sample_projects:
-            parameters = project_data.pop("parameters", [])
-            project_id = str(uuid.uuid4())
+        for tool_data in sample_tools:
+            parameters = tool_data.pop("parameters", [])
+            tool_id = str(uuid.uuid4())
 
-            project = Api2mcpProject(
-                id=project_id,
-                **project_data,
+            tool = Api2mcpTool(
+                id=tool_id,
+                **tool_data,
                 content_type="application/json",
                 output_fields={},
                 usage_examples={"examples": []},
                 created_by="admin",
                 updated_by="admin",
             )
-            session.add(project)
+            session.add(tool)
 
             for idx, param_data in enumerate(parameters):
                 param = Api2mcpParameter(
                     id=str(uuid.uuid4()),
-                    project_id=project_id,
+                    tool_id=tool_id,
                     sort_order=idx,
                     **param_data,
                 )
@@ -205,7 +231,7 @@ async def seed_sample_data():
         print("  ✓ Sample data imported successfully")
         print("    - 2 auth configs")
         print("    - 2 environment variables")
-        print("    - 2 sample projects (search_projects, get_weather)")
+        print("    - 2 sample tools (search_projects, get_weather)")
 
 
 async def show_summary():
@@ -216,7 +242,7 @@ async def show_summary():
 
     async with async_session_maker() as session:
         for table, label in [
-            ("api2mcp_projects", "Projects"),
+            ("api2mcp_tools", "Tools"),
             ("api2mcp_parameters", "Parameters"),
             ("api2mcp_auth_config", "Auth Configs"),
             ("api2mcp_env_variables", "Env Variables"),
@@ -225,15 +251,15 @@ async def show_summary():
             count = result.scalar()
             print(f"  {label}: {count}")
 
-        # Project list
+        # Tool list
         result = await session.execute(text(
-            "SELECT tool_name, version, method, status FROM api2mcp_projects ORDER BY created_at"
+            "SELECT tool_name, version, method, status FROM api2mcp_tools ORDER BY created_at"
         ))
-        projects = result.fetchall()
-        if projects:
-            print(f"\n  Project List:")
-            for p in projects:
-                print(f"    - {p[0]}@{p[1]} [{p[2]}] [{p[3]}]")
+        tools = result.fetchall()
+        if tools:
+            print(f"\n  Tool List:")
+            for t in tools:
+                print(f"    - {t[0]}@{t[1]} [{t[2]}] [{t[3]}]")
 
     print()
 
@@ -275,7 +301,7 @@ async def main():
         print("=" * 50)
         print()
         print("Next steps:")
-        print("  Start service:  ./start.sh")
+        print("  Start service:  ./start-mac.sh")
         print("  Open browser: http://localhost:34075")
         print()
 

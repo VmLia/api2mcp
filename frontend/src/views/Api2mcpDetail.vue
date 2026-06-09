@@ -476,7 +476,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useAPIProjectStore, type Api2mcpParameter } from '@/stores/apiProject'
+import { useAPIToolStore, type Api2mcpParameter } from '@/stores/apiProject'
 
 const props = defineProps<{
   editId: string | null
@@ -487,11 +487,11 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-const store = useAPIProjectStore()
+const store = useAPIToolStore()
 
 // Use editId from props instead of route params
 const isEdit = computed(() => !!props.editId)
-const projectId = computed(() => props.editId)
+const toolId = computed(() => props.editId)
 
 const currentStep = ref(0)
 const saving = ref(false)
@@ -627,20 +627,20 @@ const saveParam = async () => {
     return
   }
 
-  // If creating new project, save first to get ID
-  if (!isEdit.value && !projectId.value) {
+  // If creating new tool, save first to get ID
+  if (!isEdit.value && !toolId.value) {
     try {
-      const newId = await store.createApi2mcpProject({
+      const newId = await store.createApi2mcpTool({
         ...formData.value,
         output_fields: {},
         usage_examples: {},
       })
-      // Update project ID (via internal variable not route)
+      // Update tool ID (via internal variable not route)
       ;(formData.value as any).id = newId
       formData.value = { ...formData.value, id: newId }
-      ElMessage.success('Project saved, please continue adding parameters')
+      ElMessage.success('Tool saved, please continue adding parameters')
     } catch (error) {
-      ElMessage.error('Failed to save project, please try again later')
+      ElMessage.error('Failed to save tool, please try again later')
       return
     }
   }
@@ -650,27 +650,27 @@ const saveParam = async () => {
     parent_id: editingParentId.value,
   }
 
-  const currentProjectId = projectId.value || (formData.value as any).id
-  if (!currentProjectId) {
-    ElMessage.error('Project ID does not exist')
+  const currentToolId = toolId.value || (formData.value as any).id
+  if (!currentToolId) {
+    ElMessage.error('Tool ID does not exist')
     return
   }
 
   if (editingParam.value) {
-    await store.updateApi2mcpParameter(currentProjectId, editingParam.value.id, data)
+    await store.updateApi2mcpParameter(currentToolId, editingParam.value.id, data)
   } else {
-    await store.createApi2mcpParameter(currentProjectId, data)
+    await store.createApi2mcpParameter(currentToolId, data)
   }
 
   paramDialogVisible.value = false
-  await loadParameters(currentProjectId)
+  await loadParameters(currentToolId)
 }
 
 const deleteParam = async (param: Api2mcpParameter) => {
-  const currentProjectId = projectId.value || (formData.value as any).id
-  if (!currentProjectId) return
-  await store.deleteApi2mcpParameter(currentProjectId, param.id)
-  await loadParameters(currentProjectId)
+  const currentToolId = toolId.value || (formData.value as any).id
+  if (!currentToolId) return
+  await store.deleteApi2mcpParameter(currentToolId, param.id)
+  await loadParameters(currentToolId)
 }
 
 const loadParameters = async (currentProjectId: string) => {
@@ -723,20 +723,20 @@ const parseParams = (example: any) => {
 }
 
 const refreshPreview = async () => {
-  const currentProjectId = projectId.value || (formData.value as any).id
-  if (!currentProjectId) return
-  mcpPreview.value = await store.getMcpDefinition(currentProjectId)
+  const currentToolId = toolId.value || (formData.value as any).id
+  if (!currentToolId) return
+  mcpPreview.value = await store.getMcpDefinition(currentToolId)
 }
 
 const registerToMcp = async () => {
-  const currentProjectId = projectId.value || (formData.value as any).id
-  if (!currentProjectId) {
-    ElMessage.error('Project ID does not exist')
+  const currentToolId = toolId.value || (formData.value as any).id
+  if (!currentToolId) {
+    ElMessage.error('Tool ID does not exist')
     return
   }
   registering.value = true
   try {
-    await store.registerToMcp(currentProjectId)
+    await store.registerToMcp(currentToolId)
     ElMessage.success('Registered to MCP successfully')
   } catch (e: any) {
     ElMessage.error(e.message || 'Registration failed')
@@ -754,33 +754,33 @@ const prevStep = () => {
 const nextStep = async () => {
   if (currentStep.value >= 5) return
   
-  // If creating new project without ID, save first
-  if (!isEdit.value && !projectId.value && !(formData.value as any).id) {
+  // If creating new tool without ID, save first
+  if (!isEdit.value && !toolId.value && !(formData.value as any).id) {
     if (!formData.value.tool_name) {
       ElMessage.warning('Please fill in tool name first')
       return
     }
     
     try {
-      const newId = await store.createApi2mcpProject({
+      const newId = await store.createApi2mcpTool({
         ...formData.value,
         output_fields: {},
         usage_examples: {},
       })
-      // Update project ID (via internal variable)
+      // Update tool ID (via internal variable)
       formData.value = { ...formData.value, id: newId }
-      ElMessage.success('Project saved')
+      ElMessage.success('Tool saved')
     } catch (error) {
-      ElMessage.error('Failed to save project, please try again later')
+      ElMessage.error('Failed to save tool, please try again later')
       return
     }
   }
   
   // If editing mode, save current step data
-  const currentProjectId = projectId.value || (formData.value as any).id
-  if (currentProjectId) {
+  const currentToolId = toolId.value || (formData.value as any).id
+  if (currentToolId) {
     try {
-      await store.updateApi2mcpProject(currentProjectId, formData.value)
+      await store.updateApi2mcpTool(currentToolId, formData.value)
     } catch (error) {
       console.error('Failed to save step data:', error)
     }
@@ -801,12 +801,12 @@ const saveProject = async (closeAfterSave: boolean = false) => {
 
   saving.value = true
   try {
-    const currentProjectId = projectId.value || (formData.value as any).id
-    if (isEdit.value && currentProjectId) {
-      await store.updateApi2mcpProject(currentProjectId, formData.value)
+    const currentToolId = toolId.value || (formData.value as any).id
+    if (isEdit.value && currentToolId) {
+      await store.updateApi2mcpTool(currentToolId, formData.value)
       ElMessage.success('Saved successfully')
     } else {
-      await store.createApi2mcpProject(formData.value)
+      await store.createApi2mcpTool(formData.value)
       ElMessage.success('Created successfully')
     }
     if (closeAfterSave) {
@@ -825,11 +825,11 @@ const loadData = async () => {
     store.loadAuthConfigs(),
   ])
 
-  if (isEdit.value && projectId.value) {
-    const project = await store.loadApi2mcpProject(projectId.value)
-    if (project) {
-      formData.value = { ...project }
-      await loadParameters(projectId.value)
+  if (isEdit.value && toolId.value) {
+    const tool = await store.loadApi2mcpTool(toolId.value)
+    if (tool) {
+      formData.value = { ...tool }
+      await loadParameters(toolId.value)
       await refreshPreview()
     }
   }

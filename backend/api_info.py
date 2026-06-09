@@ -10,11 +10,11 @@ from sqlalchemy.orm import relationship
 from database import Base
 
 
-class Api2mcpProject(Base):
+class Api2mcpTool(Base):
     """
-    API2MCP API Main Table - Stores overall API configuration and MCP generation information
+    API2MCP Tool Main Table - Stores overall API tool configuration and MCP generation information
     """
-    __tablename__ = "api2mcp_projects"
+    __tablename__ = "api2mcp_tools"
 
     id = Column(String, primary_key=True)
     tool_name = Column(String, nullable=False, index=True)
@@ -52,8 +52,8 @@ class Api2mcpProject(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    auth_config = relationship("Api2mcpAuthConfig", back_populates="projects")
-    parameters = relationship("Api2mcpParameter", back_populates="project", cascade="all, delete-orphan")
+    auth_config = relationship("Api2mcpAuthConfig", back_populates="tools")
+    parameters = relationship("Api2mcpParameter", back_populates="tool", cascade="all, delete-orphan")
 
 
 class Api2mcpParameter(Base):
@@ -63,7 +63,7 @@ class Api2mcpParameter(Base):
     __tablename__ = "api2mcp_parameters"
 
     id = Column(String, primary_key=True)
-    project_id = Column(String, ForeignKey("api2mcp_projects.id"), nullable=False)
+    tool_id = Column(String, ForeignKey("api2mcp_tools.id"), nullable=False)
     parent_id = Column(String, ForeignKey("api2mcp_parameters.id"))
 
     # Parameter basic info
@@ -84,7 +84,7 @@ class Api2mcpParameter(Base):
     sort_order = Column(Integer, default=0)
 
     # Relationships
-    project = relationship("Api2mcpProject", back_populates="parameters")
+    tool = relationship("Api2mcpTool", back_populates="parameters")
 
 
 class Api2mcpAuthConfig(Base):
@@ -103,7 +103,7 @@ class Api2mcpAuthConfig(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    projects = relationship("Api2mcpProject", back_populates="auth_config")
+    tools = relationship("Api2mcpTool", back_populates="auth_config")
 
 
 class Api2mcpEnvVariable(Base):
@@ -116,7 +116,7 @@ class Api2mcpEnvVariable(Base):
     key = Column(String, nullable=False, unique=True, index=True)
     value = Column(String, nullable=False)
     scope = Column(String, default="global")  # global, project
-    project_id = Column(String)
+    tool_id = Column(String)
     description = Column(String)
 
     # Audit
