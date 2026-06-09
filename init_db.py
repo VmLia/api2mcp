@@ -168,26 +168,8 @@ async def seed_sample_data():
         # Create sample tools
         sample_tools = [
             {
-                "tool_name": "search_projects",
-                "tool_description": "Search project list, supports filtering by keyword, status, budget range, etc.",
-                "category": "Project Management",
-                "tags": ["project", "search"],
-                "method": "GET",
-                "base_url": "{{BASE_URL}}",
-                "path": "/api/v1/projects/search",
-                "transport_modes": ["streamable_http"],
-                "parameters": [
-                    {"param_name": "keyword", "param_location": "query", "param_type": "string",
-                     "required": False, "description": "Search keyword", "semantic_tag": "like"},
-                    {"param_name": "status", "param_location": "query", "param_type": "string",
-                     "required": False, "description": "Project status"},
-                    {"param_name": "budget_min", "param_location": "query", "param_type": "number",
-                     "required": False, "description": "Minimum budget (10k RMB)", "semantic_tag": "min"},
-                ],
-            },
-            {
                 "tool_name": "get_weather",
-                "tool_description": "Get weather information for specified city",
+                "tool_description": "展示用例，不可用 - Get weather information for specified city",
                 "category": "Other",
                 "tags": ["weather", "query"],
                 "method": "GET",
@@ -231,7 +213,7 @@ async def seed_sample_data():
         print("  ✓ Sample data imported successfully")
         print("    - 2 auth configs")
         print("    - 2 environment variables")
-        print("    - 2 sample tools (search_projects, get_weather)")
+        print("    - 1 sample tool (get_weather - 展示用例，不可用)")
 
 
 async def show_summary():

@@ -4,7 +4,7 @@
     <div class="step-nav">
       <el-steps :active="currentStep" align-center finish-status="success">
         <el-step title="Basic Info" />
-        <el-step title="Request" />
+        <el-step title="Advanced" />
         <el-step title="Params" />
         <el-step title="Response" />
         <el-step title="Examples" />
@@ -14,32 +14,56 @@
 
     <!-- Step Content -->
     <div class="step-content">
-      <!-- Step 1: Basic Info -->
+      <!-- Step 1: Basic Info - Core Required Fields -->
       <div v-show="currentStep === 0" class="step-panel">
         <el-card>
           <template #header>
-            <span>Basic Information</span>
+            <span>Basic Information <span class="required-badge">Required</span></span>
           </template>
-          <el-form :model="formData" label-width="120px">
+          <el-form :model="formData" label-width="140px">
             <el-form-item label="Tool Name" required>
-            <el-input v-model="formData.tool_name" placeholder="English identifier, e.g. search_projects" />
-            <div class="form-tip">Used as MCP tool name, only letters, numbers, and underscores allowed</div>
-          </el-form-item>
-          <el-form-item label="Version">
-            <el-select v-model="formData.version" style="width: 150px">
-              <el-option label="v1" value="v1" />
-              <el-option label="v2" value="v2" />
-              <el-option label="v3" value="v3" />
-              <el-option label="v4" value="v4" />
-              <el-option label="v5" value="v5" />
-              <el-option label="v6" value="v6" />
-              <el-option label="v7" value="v7" />
-              <el-option label="v8" value="v8" />
-              <el-option label="v9" value="v9" />
-              <el-option label="v10" value="v10" />
-            </el-select>
-            <div class="form-tip">Tool version. Tool name + version must be unique</div>
-          </el-form-item>
+              <el-input v-model="formData.tool_name" placeholder="English identifier, e.g. search_projects" />
+              <div class="form-tip">Used as MCP tool name, only letters, numbers, and underscores allowed</div>
+            </el-form-item>
+            <el-form-item label="Version">
+              <el-select v-model="formData.version" style="width: 150px">
+                <el-option label="v1" value="v1" />
+                <el-option label="v2" value="v2" />
+                <el-option label="v3" value="v3" />
+                <el-option label="v4" value="v4" />
+                <el-option label="v5" value="v5" />
+                <el-option label="v6" value="v6" />
+                <el-option label="v7" value="v7" />
+                <el-option label="v8" value="v8" />
+                <el-option label="v9" value="v9" />
+                <el-option label="v10" value="v10" />
+              </el-select>
+              <div class="form-tip">Tool version. Tool name + version must be unique</div>
+            </el-form-item>
+            <el-form-item label="Request Method" required>
+              <el-select v-model="formData.method" style="width: 100%">
+                <el-option label="GET" value="GET" />
+                <el-option label="POST" value="POST" />
+                <el-option label="PUT" value="PUT" />
+                <el-option label="PATCH" value="PATCH" />
+                <el-option label="DELETE" value="DELETE" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="API（URL） Endpoint" required>
+              <el-input v-model="fullUrl" placeholder="https://api.example.com/api/v1/projects/search" />
+              <div class="form-tip">Full API endpoint URL. Supports path parameters, e.g. https://api.example.com/api/v1/projects/{id}</div>
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </div>
+
+      <!-- Step 2: Advanced Settings -->
+      <div v-show="currentStep === 1" class="step-panel">
+        <el-card>
+          <template #header>
+            <span>Advanced Settings <span class="optional-badge">Optional</span></span>
+          </template>
+          <el-form :model="formData" label-width="140px">
             <el-form-item label="Description">
               <el-input
                 v-model="formData.tool_description"
@@ -65,33 +89,6 @@
                 <el-option label="Internal" value="internal" />
                 <el-option label="External" value="external" />
               </el-select>
-            </el-form-item>
-          </el-form>
-        </el-card>
-      </div>
-
-      <!-- Step 2: Request Definition -->
-      <div v-show="currentStep === 1" class="step-panel">
-        <el-card>
-          <template #header>
-            <span>Request Configuration</span>
-          </template>
-          <el-form :model="formData" label-width="120px">
-            <el-form-item label="Method" required>
-              <el-select v-model="formData.method" style="width: 100%">
-                <el-option label="GET" value="GET" />
-                <el-option label="POST" value="POST" />
-                <el-option label="PUT" value="PUT" />
-                <el-option label="PATCH" value="PATCH" />
-                <el-option label="DELETE" value="DELETE" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="Base URL" required>
-              <el-input v-model="formData.base_url" placeholder="https://api.example.com" />
-            </el-form-item>
-            <el-form-item label="Path" required>
-              <el-input v-model="formData.path" placeholder="/api/v1/projects/search" />
-              <div class="form-tip">Supports path parameters, e.g. /api/v1/projects/{id}</div>
             </el-form-item>
             <el-form-item label="Content-Type">
               <el-select v-model="formData.content_type" style="width: 100%">
@@ -545,6 +542,43 @@ const formData = ref<any>({
   transport_modes: ['streamable_http'],
 })
 
+// Full URL computed property - combines base_url and path
+const fullUrl = computed({
+  get: () => {
+    const base = formData.value.base_url || ''
+    const path = formData.value.path || ''
+    if (!base) return path
+    if (!path || path === '/') return base
+    // Remove trailing slash from base and leading slash from path if needed
+    const baseWithoutSlash = base.replace(/\/$/, '')
+    const pathWithSlash = path.startsWith('/') ? path : `/${path}`
+    return `${baseWithoutSlash}${pathWithSlash}`
+  },
+  set: (val: string) => {
+    if (!val) {
+      formData.value.base_url = ''
+      formData.value.path = '/'
+      return
+    }
+    
+    try {
+      const url = new URL(val)
+      formData.value.base_url = `${url.protocol}//${url.host}`
+      formData.value.path = url.pathname + url.search || '/'
+    } catch {
+      // Fallback for invalid URLs
+      const match = val.match(/^https?:\/\/[^\/]+/)
+      if (match) {
+        formData.value.base_url = match[0]
+        formData.value.path = val.slice(match[0].length) || '/'
+      } else {
+        formData.value.base_url = ''
+        formData.value.path = val || '/'
+      }
+    }
+  }
+})
+
 const outputFieldsTable = computed(() => {
   return Object.entries(formData.value.output_fields).map(([field, config]: [string, any]) => ({
     field,
@@ -622,21 +656,37 @@ const addChildParam = (parent: Api2mcpParameter) => {
 }
 
 const saveParam = async () => {
-  if (!formData.value.tool_name) {
-    ElMessage.warning('Please fill in tool name first')
-    return
-  }
-
-  // If creating new tool, save first to get ID
-  if (!isEdit.value && !toolId.value) {
+  // Check if tool has been created (should be created when going from step 0 to step 1)
+  const currentToolId = toolId.value || (formData.value as any).id
+  
+  // If tool not created yet, user needs to go through step 0 first
+  if (!isEdit.value && !currentToolId) {
+    // Validate all required fields and create tool
+    if (!formData.value.tool_name) {
+      ElMessage.warning('Please fill in tool name first')
+      return
+    }
+    if (!formData.value.method) {
+      ElMessage.warning('Please select request method')
+      return
+    }
+    if (!fullUrl.value) {
+      ElMessage.warning('Please fill in API Endpoint URL')
+      return
+    }
+    try {
+      new URL(fullUrl.value)
+    } catch {
+      ElMessage.warning('Please enter a valid URL')
+      return
+    }
+    
     try {
       const newId = await store.createApi2mcpTool({
         ...formData.value,
         output_fields: {},
         usage_examples: {},
       })
-      // Update tool ID (via internal variable not route)
-      ;(formData.value as any).id = newId
       formData.value = { ...formData.value, id: newId }
       ElMessage.success('Tool saved, please continue adding parameters')
     } catch (error) {
@@ -650,7 +700,6 @@ const saveParam = async () => {
     parent_id: editingParentId.value,
   }
 
-  const currentToolId = toolId.value || (formData.value as any).id
   if (!currentToolId) {
     ElMessage.error('Tool ID does not exist')
     return
@@ -754,27 +803,47 @@ const prevStep = () => {
 const nextStep = async () => {
   if (currentStep.value >= 5) return
   
-  // If creating new tool without ID, save first
-  if (!isEdit.value && !toolId.value && !(formData.value as any).id) {
+  // Step validation
+  // Step 0 -> Step 1: Validate all required fields and create tool if new
+  if (currentStep.value === 0) {
     if (!formData.value.tool_name) {
       ElMessage.warning('Please fill in tool name first')
       return
     }
-    
-    try {
-      const newId = await store.createApi2mcpTool({
-        ...formData.value,
-        output_fields: {},
-        usage_examples: {},
-      })
-      // Update tool ID (via internal variable)
-      formData.value = { ...formData.value, id: newId }
-      ElMessage.success('Tool saved')
-    } catch (error) {
-      ElMessage.error('Failed to save tool, please try again later')
+    if (!formData.value.method) {
+      ElMessage.warning('Please select request method')
       return
     }
+    if (!fullUrl.value) {
+      ElMessage.warning('Please fill in API Endpoint URL')
+      return
+    }
+    // Validate URL format
+    try {
+      new URL(fullUrl.value)
+    } catch {
+      ElMessage.warning('Please enter a valid URL')
+      return
+    }
+    
+    // Create tool when going from step 0 to step 1 (all required fields validated)
+    if (!isEdit.value && !toolId.value && !(formData.value as any).id) {
+      try {
+        const newId = await store.createApi2mcpTool({
+          ...formData.value,
+          output_fields: {},
+          usage_examples: {},
+        })
+        formData.value = { ...formData.value, id: newId }
+        ElMessage.success('Tool created successfully')
+      } catch (error) {
+        ElMessage.error('Failed to create tool, please try again later')
+        return
+      }
+    }
   }
+  
+  // Step 1+ -> next: Tool should already exist, just save progress
   
   // If editing mode, save current step data
   const currentToolId = toolId.value || (formData.value as any).id
@@ -901,6 +970,22 @@ onMounted(() => {
   font-size: 12px;
   color: #909399;
   margin-top: 4px;
+}
+.required-badge {
+  background-color: #fef2f2;
+  color: #ef4444;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+.optional-badge {
+  background-color: #f0f9ff;
+  color: #0ea5e9;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
 }
 .param-tree {
   max-height: 400px;

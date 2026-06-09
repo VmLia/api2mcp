@@ -173,18 +173,22 @@ api2mcp/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/serverapi/apimng/projects` | Get project list |
-| POST | `/serverapi/apimng/projects` | Create project |
-| GET | `/serverapi/apimng/projects/{id}` | Get project details |
-| PUT | `/serverapi/apimng/projects/{id}` | Update project |
-| DELETE | `/serverapi/apimng/projects/{id}` | Delete project |
-| GET | `/serverapi/apimng/projects/{id}/parameters` | Get project parameters |
-| POST | `/serverapi/apimng/projects/{id}/parameters` | Create parameter |
-| PUT | `/serverapi/apimng/projects/{id}/parameters/{param_id}` | Update parameter |
-| DELETE | `/serverapi/apimng/projects/{id}/parameters/{param_id}` | Delete parameter |
+| GET | `/serverapi/apimng/tools` | Get tool list |
+| POST | `/serverapi/apimng/tools` | Create tool |
+| GET | `/serverapi/apimng/tools/{id}` | Get tool details |
+| PUT | `/serverapi/apimng/tools/{id}` | Update tool |
+| DELETE | `/serverapi/apimng/tools/{id}` | Delete tool |
+| GET | `/serverapi/apimng/tools/{id}/parameters` | Get tool parameters |
+| POST | `/serverapi/apimng/tools/{id}/parameters` | Create parameter |
+| PUT | `/serverapi/apimng/tools/{id}/parameters/{param_id}` | Update parameter |
+| DELETE | `/serverapi/apimng/tools/{id}/parameters/{param_id}` | Delete parameter |
 | GET | `/serverapi/apimng/auth-configs` | Get auth config list |
 | POST | `/serverapi/apimng/auth-configs` | Create auth config |
 | DELETE | `/serverapi/apimng/auth-configs/{id}` | Delete auth config |
+| GET | `/serverapi/apimng/env-variables` | Get environment variable list |
+| POST | `/serverapi/apimng/env-variables` | Create environment variable |
+| DELETE | `/serverapi/apimng/env-variables/{id}` | Delete environment variable |
+| GET | `/serverapi/apimng/semantic-tags` | Get semantic tag list |
 | GET | `/serverapi/apimng/server-info` | Get server info |
 
 ### MCP Server Endpoints

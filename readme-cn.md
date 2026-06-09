@@ -167,18 +167,22 @@ api2mcp/
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/serverapi/apimng/projects` | 获取项目列表 |
-| POST | `/serverapi/apimng/projects` | 创建项目 |
-| GET | `/serverapi/apimng/projects/{id}` | 获取项目详情 |
-| PUT | `/serverapi/apimng/projects/{id}` | 更新项目 |
-| DELETE | `/serverapi/apimng/projects/{id}` | 删除项目 |
-| GET | `/serverapi/apimng/projects/{id}/parameters` | 获取项目参数 |
-| POST | `/serverapi/apimng/projects/{id}/parameters` | 创建参数 |
-| PUT | `/serverapi/apimng/projects/{id}/parameters/{param_id}` | 更新参数 |
-| DELETE | `/serverapi/apimng/projects/{id}/parameters/{param_id}` | 删除参数 |
+| GET | `/serverapi/apimng/tools` | 获取工具列表 |
+| POST | `/serverapi/apimng/tools` | 创建工具 |
+| GET | `/serverapi/apimng/tools/{id}` | 获取工具详情 |
+| PUT | `/serverapi/apimng/tools/{id}` | 更新工具 |
+| DELETE | `/serverapi/apimng/tools/{id}` | 删除工具 |
+| GET | `/serverapi/apimng/tools/{id}/parameters` | 获取工具参数 |
+| POST | `/serverapi/apimng/tools/{id}/parameters` | 创建参数 |
+| PUT | `/serverapi/apimng/tools/{id}/parameters/{param_id}` | 更新参数 |
+| DELETE | `/serverapi/apimng/tools/{id}/parameters/{param_id}` | 删除参数 |
 | GET | `/serverapi/apimng/auth-configs` | 获取鉴权配置列表 |
 | POST | `/serverapi/apimng/auth-configs` | 创建鉴权配置 |
 | DELETE | `/serverapi/apimng/auth-configs/{id}` | 删除鉴权配置 |
+| GET | `/serverapi/apimng/env-variables` | 获取环境变量列表 |
+| POST | `/serverapi/apimng/env-variables` | 创建环境变量 |
+| DELETE | `/serverapi/apimng/env-variables/{id}` | 删除环境变量 |
+| GET | `/serverapi/apimng/semantic-tags` | 获取语义标签列表 |
 | GET | `/serverapi/apimng/server-info` | 获取服务器信息 |
 
 ### MCP Server 端点
