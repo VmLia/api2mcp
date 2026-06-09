@@ -47,20 +47,65 @@
 ```bash
 git clone https://github.com/VmLia/api2mcp.git
 cd api2mcp
+```
 
+#### Option 1: One-click Install on Mac (Recommended)
+
+```bash
 # Install all dependencies (backend + frontend)
 ./start-mac.sh setup
+```
+
+#### Option 2: Manual Installation (for Linux/Windows or custom configuration)
+
+```bash
+# 1. Install backend Python dependencies
+cd backend
+
+# Using uv (recommended)
+uv venv .venv
+uv sync
+
+# Or using pip (alternative)
+python3 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# 2. Install frontend dependencies
+cd ../frontend
+npm install
 ```
 
 ### 2. Install Database (Optional)
 
 > If you already have a PostgreSQL database, skip to step 3 to configure the connection.
 
+#### Option 1: Using Docker Compose (Recommended)
+
 ```bash
 # Start PostgreSQL using Docker Compose
 cd docker-compose-api2mcp
 docker compose -f docker-compose-api2mcp.yaml up -d
 ```
+
+> **Note**: Docker and Docker Compose must be installed first.
+
+#### Option 2: Using Existing PostgreSQL Database
+
+If PostgreSQL is already installed on your system, create the database and user:
+
+```sql
+-- Create database
+CREATE DATABASE api2mcp;
+
+-- Create user
+CREATE USER api2mcp WITH PASSWORD 'api2mcp@123';
+
+-- Grant privileges
+GRANT ALL PRIVILEGES ON DATABASE api2mcp TO api2mcp;
+```
+
+> **Note**: Ensure the database connection configuration in `.env` matches your PostgreSQL setup.
 
 ### 3. Configure Initialization
 
@@ -112,7 +157,7 @@ python ../init_db.py --seed
 ./start-mac.sh
 ```
 
-#### Option 2: Manual Command Start
+#### Option 2: Manual Start (for Linux/Windows or custom configuration)
 ```bash
 # Backend (run in backend directory, backend logs displayed in real-time)
 cd backend
@@ -121,8 +166,13 @@ uv run uvicorn main:app --host 0.0.0.0 --port 34085 --reload
 
 # Frontend (run in frontend directory)
 cd ../frontend
-npm run dev --port 34075 --host 0.0.0.0
+npm run dev
 ```
+
+> **Note**: The port is read from the `.env` file (API2MCP_PORT_FRONTEND=34075). To specify a different port temporarily, use environment variable:
+> ```bash
+> API2MCP_PORT_FRONTEND=34075 npm run dev
+> ```
 
 Open http://localhost:34075 in your browser
 
@@ -152,19 +202,30 @@ api2mcp/
 │   ├── api_info.py       # Database models
 │   ├── config.py         # Configuration
 │   ├── database.py       # Database connection
-│   └── requirements.txt  # Python dependencies
+│   ├── pyproject.toml    # Python project configuration (uv)
+│   ├── uv.lock           # uv dependency lock file
+│   └── requirements.txt  # Python dependencies (pip compatible)
 ├── frontend/             # Vue 3 + TypeScript frontend
 │   ├── src/
 │   │   ├── views/        # Page components
 │   │   ├── stores/       # Pinia state management
 │   │   ├── router/       # Routing configuration
+│   │   ├── main.ts       # Entry file
 │   │   └── App.vue       # Root component
-│   └── package.json
+│   ├── index.html        # HTML template
+│   ├── package.json      # Node.js dependency configuration
+│   ├── package-lock.json # Node.js dependency lock file
+│   ├── vite.config.ts    # Vite build configuration
+│   ├── tsconfig.json     # TypeScript configuration
+│   └── tsconfig.node.json # TypeScript Node configuration
 ├── docker-compose-api2mcp/  # Docker database deployment
+│   └── docker-compose-api2mcp.yaml
 ├── .env                  # Configuration file (shared by frontend and backend)
-├── start.sh              # Start script
-├── stop.sh               # Stop script
-└── init_db.py            # Database initialization
+├── .env.example          # Configuration file example
+├── start-mac.sh          # Mac start script
+├── stop-mac.sh           # Mac stop script
+├── init_db.py            # Database initialization script
+└── README.md             # English documentation
 ```
 
 ## API Reference
@@ -198,6 +259,68 @@ api2mcp/
 | GET/POST | `/mcpapi` | MCP JSON-RPC root endpoint |
 | GET/POST | `/mcpapi/{identifier}` | Isolated endpoint by identifier |
 | GET/POST | `/mcpapi/{tool_name}/{version}` | Isolated endpoint by tool name + version |
+
+## FAQ
+
+### 1. Port Already in Use
+
+**Problem**: Service fails to start with "port already in use" error
+
+**Solution**:
+```bash
+# Check which process is using the port
+lsof -i :34075  # Frontend port
+lsof -i :34085  # Backend port
+
+# Kill the process
+kill -9 <PID>
+
+# Or change ports in .env file
+API2MCP_PORT_FRONTEND=34076
+API2MCP_PORT_BACKEND=34086
+```
+
+### 2. Database Connection Failed
+
+**Problem**: Cannot connect to database during initialization or service startup
+
+**Possible Causes and Solutions**:
+- **PostgreSQL not running**: Ensure PostgreSQL service is running
+- **Incorrect connection config**: Check database connection parameters in `.env` file
+- **Insufficient permissions**: Ensure the database user has access permissions
+
+### 3. Tool Name and Version Conflict
+
+**Problem**: "Tool name and version combination already exists" when creating a tool
+
+**Solution**:
+- Use a different tool name or version number
+- Or delete the existing tool with the same name and version first
+
+### 4. Frontend Cannot Access Backend API
+
+**Problem**: Frontend page cannot load data properly
+
+**Solution**:
+- Ensure backend service is running
+- Check browser console for network errors
+- Verify port configuration in `.env` file
+
+### 5. uv Command Not Found
+
+**Problem**: "uv command not found" when executing `uv run`
+
+**Solution**:
+```bash
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Or use pip instead
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python ../init_db.py
+```
 
 ## License
 

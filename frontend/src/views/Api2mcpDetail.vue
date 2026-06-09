@@ -871,11 +871,14 @@ const saveProject = async (closeAfterSave: boolean = false) => {
   saving.value = true
   try {
     const currentToolId = toolId.value || (formData.value as any).id
-    if (isEdit.value && currentToolId) {
+    if (currentToolId) {
+      // Tool already exists (either editing existing tool or created in previous step)
       await store.updateApi2mcpTool(currentToolId, formData.value)
       ElMessage.success('Saved successfully')
     } else {
-      await store.createApi2mcpTool(formData.value)
+      // Tool does not exist, create new one
+      const newId = await store.createApi2mcpTool(formData.value)
+      formData.value = { ...formData.value, id: newId }
       ElMessage.success('Created successfully')
     }
     if (closeAfterSave) {
