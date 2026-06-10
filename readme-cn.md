@@ -8,7 +8,7 @@
 - 企业需要一个简单、安全、可扩展的解决方案，能够快速集成新的 API 到智能体中。
 - 将任意 REST API 转换为 MCP（Model Context Protocol）工具，让 AI 智能体能够发现并调用你的 API。
 
-## 功能特性
+## 已实现功能特性
 
 - **可视化管理界面** - 通过分步向导配置 API
 - **传输协议支持** - Streamable HTTP（当前支持），stdio（计划中）
@@ -18,6 +18,10 @@
 - **鉴权配置** - 可复用的鉴权配置（API Key、Bearer Token、Basic Auth）
 - **环境变量** - 安全的凭证管理，支持变量替换
 - **输出映射** - 使用 JMESPath 模板转换响应数据
+
+## Roadmap
+<img width="1536" height="1024" alt="ed8897c34d2cef04700f16e6173a47e4" src="https://github.com/user-attachments/assets/f1106853-fa26-44d5-9bda-60d7982f2e88" />
+
 
 ## 快速开始
 
