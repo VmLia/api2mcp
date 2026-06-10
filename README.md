@@ -9,7 +9,8 @@
 - Convert any REST API to MCP (Model Context Protocol) tools, enabling AI agents to discover and call your APIs.
 
 **Roadmap**
-<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/e1230cac-ae01-4247-b2db-75c2a99a06c5" />
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/5b49689e-8627-4c9d-9fac-214c49e79825" />
+
 
 ## Features
 
