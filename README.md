@@ -8,6 +8,9 @@
 - Enterprises need a simple, secure, and extensible solution to quickly integrate new APIs into agents.
 - Convert any REST API to MCP (Model Context Protocol) tools, enabling AI agents to discover and call your APIs.
 
+**Roadmap**
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/e1230cac-ae01-4247-b2db-75c2a99a06c5" />
+
 ## Features
 
 - **Visual Management Interface** - Configure APIs through a step-by-step wizard
@@ -18,6 +21,7 @@
 - **Auth Configuration** - Reusable auth configurations (API Key, Bearer Token, Basic Auth)
 - **Environment Variables** - Secure credential management with variable substitution
 - **Output Mapping** - Transform response data using JMESPath templates
+
 
 <img width="1612" height="824" alt="image" src="https://github.com/user-attachments/assets/6dcc0c2f-278c-4653-aee2-0797d8326ca1" />
 <img width="1612" height="824" alt="image" src="https://github.com/user-attachments/assets/a3c03519-a7f8-4664-9ea0-4b2fd46183e3" />
