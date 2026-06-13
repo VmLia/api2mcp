@@ -84,7 +84,7 @@ npm install
 ```bash
 # 使用 Docker Compose 一键启动 PostgreSQL
 cd docker-compose-api2mcp
-docker compose -f docker-compose-api2mcp.yaml up -d
+docker compose -f docker-compose-middleware.yaml up -d
 ```
 
 > **说明**：使用此方式需要先安装 Docker 和 Docker Compose。
@@ -155,6 +155,7 @@ python ../init_db.py --seed
 # 开发模式（同时启动前后端应用，后端日志实时显示）
 ./start-mac.sh
 ```
+
 #### 方式二：手动启动（适用于 Linux/Windows 或需要自定义配置）
 ```bash
 # 开发模式（后端日志实时显示，在 backend 目录下执行即可）
@@ -173,6 +174,66 @@ npm run dev
 > ```
 
 在浏览器中打开 http://localhost:34075
+
+## 容器化部署
+
+### Docker Compose 文件
+
+项目提供了三个 Docker Compose 文件，用于不同的部署场景：
+
+| 文件 | 说明 | 命令 |
+|------|------|------|
+| `docker-compose-all.yaml` | 启动所有服务（应用 + 数据库） | `docker compose -f docker-compose-all.yaml up -d` |
+| `docker-compose-api2mcp.yaml` | 只启动应用（需要预先配置数据库） | `docker compose -f docker-compose-api2mcp.yaml up -d` |
+| `docker-compose-middleware.yaml` | 只启动数据库中间件 | `docker compose -f docker-compose-middleware.yaml up -d` |
+
+### 使用 Docker Compose 构建和运行
+
+```bash
+# 进入 docker-compose 目录
+cd docker-compose-api2mcp
+
+# 启动所有服务（应用 + 数据库）
+docker compose -f docker-compose-all.yaml up -d
+
+# 查看服务状态
+docker compose -f docker-compose-all.yaml ps
+
+# 查看日志
+docker compose -f docker-compose-all.yaml logs -f api2mcp
+
+# 停止服务
+docker compose -f docker-compose-all.yaml down
+```
+
+### Docker 环境变量配置
+
+你可以通过环境变量自定义数据库配置：
+
+```bash
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_USER=myuser
+export DB_PASSWORD=mypassword
+export DB_NAME=mydatabase
+
+docker compose -f docker-compose-api2mcp.yaml up -d
+```
+
+### 多架构构建
+
+要构建同时兼容 x86-64 和 ARM64 架构的镜像（例如从 M4 Mac 构建部署到 Intel 服务器）：
+
+```bash
+# 设置你的镜像仓库（可选）
+export REGISTRY="docker.io/your-username/"
+export IMAGE_TAG="v1.0.0"
+
+# 运行多架构构建
+./build-multiarch.sh
+```
+
+该脚本将为 `linux/amd64` 和 `linux/arm64` 两个平台构建并推送镜像。
 
 ## MCP 端点
 
@@ -194,12 +255,16 @@ npm run dev
 ```
 api2mcp/
 ├── backend/              # Python FastAPI 后端
-│   ├── main.py           # 应用入口
-│   ├── api.py            # 管理 API 路由
-│   ├── mcp_server.py     # MCP 协议实现
-│   ├── api_info.py       # 数据库模型
-│   ├── config.py         # 配置
-│   ├── database.py       # 数据库连接
+│   ├── src/              # 源代码目录
+│   │   └── api2mcp/      # 包目录
+│   │       ├── controller/   # REST API 控制器
+│   │       ├── service/      # 业务逻辑层
+│   │       ├── repository/   # 数据访问层
+│   │       ├── model/        # 数据库模型
+│   │       ├── database/     # 数据库配置
+│   │       ├── config/       # 应用配置
+│   │       ├── middleware/   # 自定义中间件
+│   │       └── main.py       # 应用入口
 │   ├── pyproject.toml    # Python 项目配置（uv）
 │   ├── uv.lock           # uv 依赖锁文件
 │   └── requirements.txt  # Python 依赖（pip 兼容）
@@ -216,12 +281,17 @@ api2mcp/
 │   ├── vite.config.ts    # Vite 构建配置
 │   ├── tsconfig.json     # TypeScript 配置
 │   └── tsconfig.node.json # TypeScript Node 配置
-├── docker-compose-api2mcp/  # Docker 数据库部署
-│   └── docker-compose-api2mcp.yaml
+├── docker-compose-api2mcp/  # Docker Compose 配置文件
+│   ├── docker-compose-all.yaml        # 所有服务（应用 + 数据库）
+│   ├── docker-compose-api2mcp.yaml    # 仅应用
+│   └── docker-compose-middleware.yaml # 仅数据库
 ├── .env                  # 配置文件（前后端共用）
 ├── .env.example          # 配置文件示例
-├── start-mac.sh          # Mac 启动脚本
-├── stop-mac.sh           # Mac 停止脚本
+├── Dockerfile            # 一体化部署的 Docker 镜像
+├── build-multiarch.sh    # 多架构构建脚本
+├── start-mac.sh          # 跨平台启动脚本（macOS/Linux）
+├── stop-mac.sh           # 跨平台停止脚本（macOS/Linux）
+├── entrypoint.sh         # Docker 入口脚本
 ├── init_db.py            # 数据库初始化脚本
 └── README.md             # 英文文档
 ```
@@ -319,6 +389,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python ../init_db.py
 ```
+
+### 6. 容器镜像兼容性
+
+**问题**：在 M4 Mac（ARM64）上构建的镜像无法在 x86-64 Linux 服务器上运行
+
+**解决方案**：
+```bash
+# 使用多架构构建脚本
+./build-multiarch.sh
+```
+
+这将为 `linux/amd64` 和 `linux/arm64` 两个平台构建镜像。
 
 ## 许可证
 

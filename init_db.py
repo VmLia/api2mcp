@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 """
-API2MCP Database Initialization Script
+API2MCP 数据库初始化脚本
 
-Usage:
-  python init_db.py          # Create table structure (first use)
-  python init_db.py --seed   # Create table structure + import sample data
-  python init_db.py --check  # Only check table structure, do not create
+用法:
+  python init_db.py          # 创建表结构（首次使用）
+  python init_db.py --seed  # 创建表结构 + 导入示例数据
+  python init_db.py --check # 仅检查表结构，不创建
 """
 import asyncio
 import sys
 import os
 
-# Add backend directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+# 添加 src 目录到路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend', 'src'))
 
 from sqlalchemy import text
 
-from database import engine, async_session_maker, Base
-from api_info import Api2mcpTool, Api2mcpParameter, Api2mcpAuthConfig, Api2mcpEnvVariable
+from api2mcp.database import engine, async_session_maker, Base
+from api2mcp.model.entity.tool import Api2mcpTool
+from api2mcp.model.entity.parameter import Api2mcpParameter
+from api2mcp.model.entity.auth_config import Api2mcpAuthConfig
+from api2mcp.model.entity.env_variable import Api2mcpEnvVariable
 
 
 # Expected table names list

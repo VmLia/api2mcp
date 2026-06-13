@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # API2MCP Subsystem Stop Script
+# Cross-platform: macOS, CentOS, Ubuntu
 #
 
 set -e
@@ -29,20 +30,46 @@ PID_DIR="${SCRIPT_DIR}/pids"
 BACKEND_PID="${PID_DIR}/backend.pid"
 FRONTEND_PID="${PID_DIR}/frontend.pid"
 
-# Check if port is occupied
+# Check if port is occupied (cross-platform compatible)
 check_port() {
     local port=$1
-    if lsof -i :${port} > /dev/null 2>&1; then
-        return 1  # Port is occupied
+    # Try ss first (available on most Linux systems)
+    if command -v ss &> /dev/null; then
+        if ss -tlnp | grep -q ":${port} "; then
+            return 1  # Port is occupied
+        fi
+    elif command -v lsof &> /dev/null; then
+        # Fallback to lsof (macOS)
+        if lsof -i ":${port}" > /dev/null 2>&1; then
+            return 1  # Port is occupied
+        fi
+    elif command -v netstat &> /dev/null; then
+        # Fallback to netstat (older systems)
+        if netstat -tlnp 2>/dev/null | grep -q ":${port} " || netstat -an 2>/dev/null | grep -q ".${port} "; then
+            return 1  # Port is occupied
+        fi
     fi
     return 0  # Port is available
 }
 
-# Kill process occupying port
+# Kill process occupying port (cross-platform compatible)
 kill_port() {
     local port=$1
     echo -e "${YELLOW}Cleaning up process on port ${port}...${NC}"
-    lsof -ti :${port} | xargs kill -9 2>/dev/null || true
+    
+    # Try ss first (available on most Linux systems)
+    if command -v ss &> /dev/null; then
+        local pids=$(ss -tlnp | grep ":${port} " | awk '{print $7}' | sed 's/,.*//; s/.*=//' | grep -v '^$')
+        if [ -n "${pids}" ]; then
+            kill -9 ${pids} 2>/dev/null || true
+        fi
+    elif command -v lsof &> /dev/null; then
+        # Fallback to lsof (macOS)
+        lsof -ti ":${port}" | xargs kill -9 2>/dev/null || true
+    elif command -v fuser &> /dev/null; then
+        # Fallback to fuser (some Linux systems)
+        fuser -k -n tcp "${port}" 2>/dev/null || true
+    fi
     sleep 1
 }
 

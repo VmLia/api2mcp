@@ -1,12 +1,13 @@
 """
-Database Connection Configuration
+数据库连接配置
 """
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
-from config import settings
+from .config import settings
 
-# Create async engine
+
+# 创建异步引擎
 engine = create_async_engine(
     settings.database_url,
     echo=settings.LOG_LEVEL == "DEBUG",
@@ -14,7 +15,8 @@ engine = create_async_engine(
     max_overflow=20
 )
 
-# Create async session factory
+
+# 创建异步会话工厂
 async_session_maker = async_sessionmaker(
     engine,
     class_=AsyncSession,
@@ -23,4 +25,5 @@ async_session_maker = async_sessionmaker(
 
 
 class Base(DeclarativeBase):
+    """SQLAlchemy 声明性基类"""
     pass

@@ -1,0 +1,32 @@
+# API2MCP Application Only
+# 只启动应用（前后端），需要预先启动数据库
+# Start: docker compose -f docker-compose-api2mcp.yaml up -d
+# Stop: docker compose -f docker-compose-api2mcp.yaml down
+
+version: '3.8'
+
+services:
+  # ===============================
+  # API2MCP Application
+  # ===============================
+  api2mcp:
+    build:
+      context: ../../
+      dockerfile: docker/docker-build/Dockerfile
+    container_name: api2mcp
+    ports:
+      - "34075:34075"  # Frontend
+      - "34085:34085"  # Backend
+    environment:
+      - API2MCP_PORT_BACKEND=34085
+      - API2MCP_PORT_FRONTEND=34075
+      - DB_TYPE=postgresql
+      - DB_HOST=${DB_HOST:-localhost}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-api2mcp}
+      - DB_PASSWORD=${DB_PASSWORD:-api2mcp@123}
+      - DB_NAME=${DB_NAME:-api2mcp}
+      - DB_DRIVER=asyncpg
+      - LOG_REQUEST_ENABLED=${LOG_REQUEST_ENABLED:-true}
+      - UVICORN_ACCESS_LOG=${UVICORN_ACCESS_LOG:-true}
+    restart: unless-stopped

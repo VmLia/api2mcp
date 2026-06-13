@@ -90,7 +90,7 @@ npm install
 ```bash
 # Start PostgreSQL using Docker Compose
 cd docker-compose-api2mcp
-docker compose -f docker-compose-api2mcp.yaml up -d
+docker compose -f docker-compose-middleware.yaml up -d
 ```
 
 > **Note**: Docker and Docker Compose must be installed first.
@@ -181,6 +181,66 @@ npm run dev
 
 Open http://localhost:34075 in your browser
 
+## Container Deployment
+
+### Docker Compose Files
+
+The project provides three Docker Compose files for different deployment scenarios:
+
+| File | Description | Command |
+|------|-------------|---------|
+| `docker-compose-all.yaml` | Start all services (application + database) | `docker compose -f docker-compose-all.yaml up -d` |
+| `docker-compose-api2mcp.yaml` | Start only application (requires pre-configured database) | `docker compose -f docker-compose-api2mcp.yaml up -d` |
+| `docker-compose-middleware.yaml` | Start only database middleware | `docker compose -f docker-compose-middleware.yaml up -d` |
+
+### Build and Run with Docker Compose
+
+```bash
+# Navigate to docker-compose directory
+cd docker-compose-api2mcp
+
+# Start all services (application + database)
+docker compose -f docker-compose-all.yaml up -d
+
+# Check service status
+docker compose -f docker-compose-all.yaml ps
+
+# View logs
+docker compose -f docker-compose-all.yaml logs -f api2mcp
+
+# Stop services
+docker compose -f docker-compose-all.yaml down
+```
+
+### Environment Variables for Docker
+
+You can customize the database configuration using environment variables:
+
+```bash
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_USER=myuser
+export DB_PASSWORD=mypassword
+export DB_NAME=mydatabase
+
+docker compose -f docker-compose-api2mcp.yaml up -d
+```
+
+### Multi-Architecture Build
+
+To build images compatible with both x86-64 and ARM64 architectures (e.g., for deployment on Intel servers from M4 Mac):
+
+```bash
+# Set your registry (optional)
+export REGISTRY="docker.io/your-username/"
+export IMAGE_TAG="v1.0.0"
+
+# Run multi-architecture build
+./build-multiarch.sh
+```
+
+The script will build and push images for both `linux/amd64` and `linux/arm64` platforms.
+
 ## MCP Endpoints
 
 | Endpoint | Description |
@@ -201,12 +261,16 @@ Open http://localhost:34075 in your browser
 ```
 api2mcp/
 ├── backend/              # Python FastAPI backend
-│   ├── main.py           # Application entry
-│   ├── api.py            # Management API routes
-│   ├── mcp_server.py     # MCP protocol implementation
-│   ├── api_info.py       # Database models
-│   ├── config.py         # Configuration
-│   ├── database.py       # Database connection
+│   ├── src/              # Source code
+│   │   └── api2mcp/      # Package directory
+│   │       ├── controller/   # REST API controllers
+│   │       ├── service/      # Business logic
+│   │       ├── repository/   # Data access layer
+│   │       ├── model/        # Database models
+│   │       ├── database/     # Database configuration
+│   │       ├── config/       # Application configuration
+│   │       ├── middleware/   # Custom middleware
+│   │       └── main.py       # Application entry
 │   ├── pyproject.toml    # Python project configuration (uv)
 │   ├── uv.lock           # uv dependency lock file
 │   └── requirements.txt  # Python dependencies (pip compatible)
@@ -223,12 +287,17 @@ api2mcp/
 │   ├── vite.config.ts    # Vite build configuration
 │   ├── tsconfig.json     # TypeScript configuration
 │   └── tsconfig.node.json # TypeScript Node configuration
-├── docker-compose-api2mcp/  # Docker database deployment
-│   └── docker-compose-api2mcp.yaml
+├── docker-compose-api2mcp/  # Docker Compose configurations
+│   ├── docker-compose-all.yaml        # All services (app + database)
+│   ├── docker-compose-api2mcp.yaml    # Application only
+│   └── docker-compose-middleware.yaml # Database only
 ├── .env                  # Configuration file (shared by frontend and backend)
 ├── .env.example          # Configuration file example
-├── start-mac.sh          # Mac start script
-├── stop-mac.sh           # Mac stop script
+├── Dockerfile            # Docker image for all-in-one deployment
+├── build-multiarch.sh    # Multi-architecture build script
+├── start-mac.sh          # Cross-platform start script (macOS/Linux)
+├── stop-mac.sh           # Cross-platform stop script (macOS/Linux)
+├── entrypoint.sh         # Docker entrypoint script
 ├── init_db.py            # Database initialization script
 └── README.md             # English documentation
 ```
@@ -326,6 +395,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python ../init_db.py
 ```
+
+### 6. Container Image Compatibility
+
+**Problem**: Image built on M4 Mac (ARM64) cannot run on x86-64 Linux servers
+
+**Solution**:
+```bash
+# Use multi-architecture build script
+./build-multiarch.sh
+```
+
+This will build images for both `linux/amd64` and `linux/arm64` platforms.
 
 ## License
 

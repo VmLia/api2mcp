@@ -1,0 +1,44 @@
+# ===============================
+# Docker Ignore Rules
+# ===============================
+
+# Node.js dependencies
+node_modules/
+frontend/node_modules/
+
+# Python virtual environment
+backend/.venv/
+.venv/
+
+# Build artifacts
+frontend/dist/
+*.pyc
+*.pyo
+__pycache__/
+
+# Logs
+logs/
+*.log
+
+# Configuration
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

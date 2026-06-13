@@ -2,6 +2,7 @@
 #
 # API2MCP Startup Script
 # Supports uv or pip for Python environment management
+# Cross-platform: macOS, CentOS, Ubuntu
 #
 
 set -e
@@ -28,6 +29,14 @@ fi
 # Default port configuration
 API2MCP_PORT_FRONTEND="${API2MCP_PORT_FRONTEND:-34075}"
 API2MCP_PORT_BACKEND="${API2MCP_PORT_BACKEND:-34085}"
+UVICORN_ACCESS_LOG="${UVICORN_ACCESS_LOG:-true}"
+
+# Build uvicorn command with access log control
+if [ "${UVICORN_ACCESS_LOG}" = "true" ] || [ "${UVICORN_ACCESS_LOG}" = "1" ]; then
+    UVICORN_ACCESS_LOG_FLAG="--access-log"
+else
+    UVICORN_ACCESS_LOG_FLAG="--no-access-log"
+fi
 
 # Create necessary directories
 mkdir -p "${PID_DIR}"
@@ -41,20 +50,46 @@ FRONTEND_LOG="${LOG_DIR}/frontend.log"
 BACKEND_PID="${PID_DIR}/backend.pid"
 FRONTEND_PID="${PID_DIR}/frontend.pid"
 
-# Check if port is occupied
+# Check if port is occupied (cross-platform compatible)
 check_port() {
     local port=$1
-    if lsof -i :${port} > /dev/null 2>&1; then
-        return 1  # Port occupied
+    # Try ss first (available on most Linux systems)
+    if command -v ss &> /dev/null; then
+        if ss -tlnp | grep -q ":${port} "; then
+            return 1  # Port is occupied
+        fi
+    elif command -v lsof &> /dev/null; then
+        # Fallback to lsof (macOS)
+        if lsof -i ":${port}" > /dev/null 2>&1; then
+            return 1  # Port is occupied
+        fi
+    elif command -v netstat &> /dev/null; then
+        # Fallback to netstat (older systems)
+        if netstat -tlnp 2>/dev/null | grep -q ":${port} " || netstat -an 2>/dev/null | grep -q ".${port} "; then
+            return 1  # Port is occupied
+        fi
     fi
-    return 0  # Port available
+    return 0  # Port is available
 }
 
-# Kill process occupying port
+# Kill process occupying port (cross-platform compatible)
 kill_port() {
     local port=$1
-    echo -e "${YELLOW}Killing process on port ${port}...${NC}"
-    lsof -ti :${port} | xargs kill -9 2>/dev/null || true
+    echo -e "${YELLOW}Cleaning up process on port ${port}...${NC}"
+    
+    # Try ss first (available on most Linux systems)
+    if command -v ss &> /dev/null; then
+        local pids=$(ss -tlnp | grep ":${port} " | awk '{print $7}' | sed 's/,.*//; s/.*=//' | grep -v '^$')
+        if [ -n "${pids}" ]; then
+            kill -9 ${pids} 2>/dev/null || true
+        fi
+    elif command -v lsof &> /dev/null; then
+        # Fallback to lsof (macOS)
+        lsof -ti ":${port}" | xargs kill -9 2>/dev/null || true
+    elif command -v fuser &> /dev/null; then
+        # Fallback to fuser (some Linux systems)
+        fuser -k -n tcp "${port}" 2>/dev/null || true
+    fi
     sleep 1
 }
 
@@ -63,7 +98,14 @@ check_command() {
     local cmd=$1
     if ! command -v ${cmd} &> /dev/null; then
         echo -e "${RED}Error: ${cmd} not installed${NC}"
-        echo -e "${YELLOW}Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh${NC}"
+        case "${cmd}" in
+            uv)
+                echo -e "${YELLOW}Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh${NC}"
+                ;;
+            npm)
+                echo -e "${YELLOW}Install Node.js: https://nodejs.org/en/download/package-manager/${NC}"
+                ;;
+        esac
         exit 1
     fi
 }
@@ -103,7 +145,7 @@ init_python_env() {
             echo -e "${GREEN}✓ Python virtual environment already exists${NC}"
         else
             echo -e "${YELLOW}Creating Python virtual environment...${NC}"
-            python3 -m venv .venv
+            python3 -m venv .venv || python -m venv .venv
         fi
 
         # Activate virtual environment and install dependencies
@@ -137,7 +179,7 @@ start_backend() {
     echo ""
     
     # Run in foreground, output logs directly
-    uvicorn main:app --host 0.0.0.0 --port ${API2MCP_PORT_BACKEND} --log-level info
+    uvicorn api2mcp.main:app --host 0.0.0.0 --port ${API2MCP_PORT_BACKEND} --log-level info ${UVICORN_ACCESS_LOG_FLAG}
 }
 
 # Start backend in background mode
@@ -155,7 +197,7 @@ start_backend_bg() {
     
     # Start service
     echo -e "${YELLOW}Starting backend service (port: ${API2MCP_PORT_BACKEND})...${NC}"
-    nohup uvicorn main:app --host 0.0.0.0 --port ${API2MCP_PORT_BACKEND} > "${BACKEND_LOG}" 2>&1 &
+    nohup uvicorn api2mcp.main:app --host 0.0.0.0 --port ${API2MCP_PORT_BACKEND} --log-level info ${UVICORN_ACCESS_LOG_FLAG} > "${BACKEND_LOG}" 2>&1 &
     echo $! > "${BACKEND_PID}"
     
     # Wait for service to start
@@ -337,6 +379,11 @@ show_help() {
     echo "  API2MCP_PORT_BACKEND   Backend port (default: 34085)"
     echo "  DATABASE_URL           Database connection URL"
     echo "  VITE_API_URL           Frontend API proxy URL (empty uses current domain)"
+    echo ""
+    echo -e "${GREEN}Supported Platforms:${NC}"
+    echo "  - macOS"
+    echo "  - CentOS/RHEL"
+    echo "  - Ubuntu/Debian"
     echo ""
     echo -e "${GREEN}Examples:${NC}"
     echo "  $0                         # Start frontend and backend with backend in foreground"

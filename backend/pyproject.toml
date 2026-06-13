@@ -1,7 +1,7 @@
 [project]
 name = "api2mcp-backend"
 version = "1.0.0"
-description = "API2MCP Backend Service"
+description = "API2MCP Backend Service - REST API to MCP Bridge"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.104.0",
@@ -21,3 +21,10 @@ dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
 ]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

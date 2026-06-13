@@ -1,10 +1,14 @@
-# API2MCP DB
-# Start: docker compose -f docker-compose-api2mcp.yaml up -d
-# Stop: docker compose -f docker-compose-api2mcp.yaml down
+# API2MCP Middleware
+# 只启动依赖的数据库中间件
+# Start: docker compose -f docker-compose-middleware.yaml up -d
+# Stop: docker compose -f docker-compose-middleware.yaml down
 
 version: '3.8'
 
 services:
+  # ===============================
+  # PostgreSQL Database
+  # ===============================
   postgres:
     image: pgvector/pgvector:0.7.0-pg15
     container_name: api2mcp-postgres

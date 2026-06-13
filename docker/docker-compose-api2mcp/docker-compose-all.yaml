@@ -1,0 +1,68 @@
+# API2MCP All Services
+# 启动所有服务：应用（前后端）+ 数据库依赖
+# Start: docker compose -f docker-compose-all.yaml up -d
+# Stop: docker compose -f docker-compose-all.yaml down
+
+version: '3.8'
+
+services:
+  # ===============================
+  # API2MCP Application (Frontend + Backend)
+  # ===============================
+  api2mcp:
+    build:
+      context: ../../
+      dockerfile: docker/docker-build/Dockerfile
+    container_name: api2mcp
+    ports:
+      - "34075:34075"  # Frontend
+      - "34085:34085"  # Backend
+    environment:
+      - API2MCP_PORT_BACKEND=34085
+      - API2MCP_PORT_FRONTEND=34075
+      - DB_TYPE=postgresql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-api2mcp}
+      - DB_PASSWORD=${DB_PASSWORD:-api2mcp@123}
+      - DB_NAME=${DB_NAME:-api2mcp}
+      - DB_DRIVER=asyncpg
+      - LOG_REQUEST_ENABLED=${LOG_REQUEST_ENABLED:-true}
+      - UVICORN_ACCESS_LOG=${UVICORN_ACCESS_LOG:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - api2mcp-network
+
+  # ===============================
+  # PostgreSQL Database (External Dependency)
+  # ===============================
+  postgres:
+    image: pgvector/pgvector:0.7.0-pg15
+    container_name: api2mcp-postgres
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-api2mcp}
+      POSTGRES_USER: ${DB_USER:-api2mcp}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-api2mcp@123}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-api2mcp} -d ${DB_NAME:-api2mcp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - api2mcp-network
+
+volumes:
+  pgdata:
+
+networks:
+  api2mcp-network:
+    driver: bridge

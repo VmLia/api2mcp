@@ -36,7 +36,7 @@ wheels = [
 [[package]]
 name = "api2mcp-backend"
 version = "1.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
