@@ -1,23 +1,39 @@
 """
 API2MCP 后端服务主入口
+
+优化版本：
+- 添加 Prometheus 指标端点
+- 优化生命周期管理
+- 添加系统状态端点
 """
 import logging
 import uuid
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.routing import APIRoute
 
 from .config import settings
 from .api_registry.routers import tool_router, smart_parser_router
 from .mcp_gateway.routers import mcp_router
 from .mcp_gateway.state import server_state_manager
-from .core import LoggingMiddleware, get_redis_client, close_redis_client
+from .core import (
+    LoggingMiddleware,
+    get_redis_client,
+    close_redis_client,
+    http_client_pool,
+    circuit_breaker_manager,
+    rate_limiter,
+    metrics_collector,
+    get_metrics_text
+)
 
 # 添加项目根目录到 Python 路径，确保能导入 init 模块
 _project_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -36,6 +52,7 @@ logging.basicConfig(
 
 # 服务实例 ID（使用主机名或随机生成）
 SERVER_INSTANCE_ID = str(uuid.uuid4())[:8]
+SERVICE_START_TIME = time.time()
 
 
 @asynccontextmanager
@@ -45,8 +62,10 @@ async def lifespan(app: FastAPI):
     logging.info(f"API2MCP service starting on port: {settings.BACKEND_PORT}")
     logging.info(f"Server instance ID: {SERVER_INSTANCE_ID}")
 
+    # 设置指标收集器启动时间
+    metrics_collector.set_start_time()
+
     # 数据库表结构初始化（在服务启动时执行）
-    # API2MCP_DB_DEL: 是否删除已存在的表（true=删除重建，false=仅创建缺失的表）
     try:
         logging.info(f"Database table initialization starting (drop_existing={settings.API2MCP_DB_DEL})")
         await init_tables(drop_existing=settings.API2MCP_DB_DEL)
@@ -91,6 +110,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logging.warning(f"Failed to unregister server: {e}")
 
+    # 关闭 HTTP 连接池
+    try:
+        await http_client_pool.close()
+        logging.info("HTTP client pool closed")
+    except Exception as e:
+        logging.warning(f"Failed to close HTTP client: {e}")
+
     # 关闭 Redis 连接
     try:
         await close_redis_client()
@@ -127,22 +153,57 @@ app.include_router(smart_parser_router)  # smart_parser_router 已经包含 /ser
 app.include_router(mcp_router)  # mcp_router 已经包含 /mcpapi prefix
 
 
-# 健康检查
+# ── 系统端点 ──
+
 @app.get("/health", tags=["system"])
 async def health_check():
     """健康检查端点"""
-    return {"status": "healthy", "service": "api2mcp", "instance_id": SERVER_INSTANCE_ID}
+    return {
+        "status": "healthy",
+        "service": "api2mcp",
+        "instance_id": SERVER_INSTANCE_ID,
+        "uptime_seconds": int(time.time() - SERVICE_START_TIME)
+    }
 
 
-# 获取服务状态
 @app.get("/server/status", tags=["system"])
 async def get_server_status():
     """获取服务状态信息"""
     servers = await server_state_manager.get_all_servers()
     return {
         "instance_id": SERVER_INSTANCE_ID,
+        "uptime_seconds": int(time.time() - SERVICE_START_TIME),
         "servers": [server.to_dict() for server in servers]
     }
+
+
+@app.get("/server/metrics", tags=["system"])
+async def get_system_metrics():
+    """获取系统指标（聚合信息）"""
+    # HTTP 客户端统计
+    http_stats = http_client_pool.stats
+    
+    # 熔断器统计
+    circuit_breakers = await circuit_breaker_manager.get_all_stats()
+    
+    # 限流器统计
+    rate_limit_stats = await rate_limiter.get_stats()
+    
+    return {
+        "http_client": http_stats,
+        "circuit_breakers": circuit_breakers,
+        "rate_limiter": rate_limit_stats,
+        "uptime_seconds": int(time.time() - SERVICE_START_TIME)
+    }
+
+
+@app.get("/metrics", tags=["system"])
+async def prometheus_metrics():
+    """Prometheus 指标端点"""
+    return Response(
+        content=get_metrics_text(),
+        media_type="text/plain; version=0.0.4; charset=utf-8"
+    )
 
 
 # ── 前端静态文件服务和路由支持 ──

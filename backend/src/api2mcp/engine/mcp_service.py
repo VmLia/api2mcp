@@ -1,12 +1,16 @@
 """
 MCP 服务 - 处理 MCP 协议相关的业务逻辑
+
+优化版本：
+- 使用 HTTP 连接池
+- 支持熔断器
+- 支持限流
 """
 import json
 import logging
 import base64
 from typing import Dict, Any, List, Optional
 
-import httpx
 from sqlalchemy import select
 
 from ..database import async_session_maker
@@ -15,6 +19,9 @@ from ..api_registry.entities.parameter import Api2mcpParameter
 from ..api_registry.entities.auth_config import Api2mcpAuthConfig
 from ..api_registry.entities.env_variable import Api2mcpEnvVariable
 from ..config import settings
+from ..core.http_client import http_client_pool
+from ..core.circuit_breaker import circuit_breaker_manager, CircuitOpenError
+from ..core.rate_limiter import rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +30,7 @@ class MCPService:
     """MCP 协议服务"""
 
     def __init__(self):
-        self.http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.HTTP_CLIENT_TIMEOUT))
+        pass  # 使用全局 HTTP 客户端池
 
     async def resolve_env_variables(
         self, value: str, tool_id: Optional[str] = None
@@ -145,10 +152,10 @@ class MCPService:
                 result[param.param_name] = value
         return result
 
-    async def execute_api_call(
+    async def _do_api_call(
         self, tool: Api2mcpBaseinfo, arguments: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """执行实际 API 调用"""
+        """执行实际 API 调用（内部方法）"""
         async with async_session_maker() as session:
             result = await session.execute(
                 select(Api2mcpParameter).where(Api2mcpParameter.baseinfo_id == tool.id)
@@ -178,53 +185,84 @@ class MCPService:
         # 将 header 参数添加到请求头
         headers.update(header_params)
 
-        try:
-            timeout = tool.timeout_ms / 1000 if tool.timeout_ms else 30
+        # 获取超时配置
+        timeout = tool.timeout_ms / 1000 if tool.timeout_ms else settings.HTTP_CLIENT_TIMEOUT
 
-            if tool.method.upper() == "GET":
-                response = await self.http_client.get(
+        # 使用连接池执行请求
+        async with http_client_pool.acquire(timeout=timeout) as client:
+            method = tool.method.upper()
+            
+            if method == "GET":
+                response = await client.get(
                     url,
                     params={**query_params, **path_params},
                     headers=headers,
                     timeout=timeout
                 )
-
-            elif tool.method.upper() == "POST":
-                response = await self.http_client.post(
+            elif method == "POST":
+                response = await client.post(
                     url,
                     params=query_params,
                     json=body_params if body_params else arguments,
                     headers=headers,
                     timeout=timeout
                 )
-
-            elif tool.method.upper() == "PUT":
-                response = await self.http_client.put(
+            elif method == "PUT":
+                response = await client.put(
                     url,
                     params=query_params,
                     json=body_params if body_params else arguments,
                     headers=headers,
                     timeout=timeout
                 )
-
-            elif tool.method.upper() == "DELETE":
-                response = await self.http_client.delete(
+            elif method == "DELETE":
+                response = await client.delete(
                     url,
                     params=query_params,
                     headers=headers,
                     timeout=timeout
                 )
-
             else:
                 raise ValueError(f"Unsupported HTTP method: {tool.method}")
 
             response.raise_for_status()
             return response.json()
 
-        except httpx.HTTPError as e:
-            raise ValueError(f"API call failed: {str(e)}")
+    async def execute_api_call(
+        self, tool: Api2mcpBaseinfo, arguments: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        执行 API 调用（带熔断保护）
+        
+        流程：
+        1. 限流检查
+        2. 熔断器保护
+        3. 执行调用
+        """
+        tool_name = f"{tool.mcp_name}@{tool.version}"
+        
+        # 1. 限流检查
+        allowed, wait_time = await rate_limiter.check_limit(
+            tool_name=tool.mcp_name,
+            tokens=1
+        )
+        if not allowed:
+            raise ValueError(f"Rate limit exceeded for tool: {tool.mcp_name}")
+        
+        # 2. 熔断器保护
+        try:
+            result = await circuit_breaker_manager.call(
+                tool_name,
+                self._do_api_call,
+                tool,
+                arguments
+            )
+            return result
+            
+        except CircuitOpenError:
+            raise ValueError(f"Circuit breaker is open for tool: {tool_name}")
         except Exception as e:
-            raise ValueError(f"Request processing failed: {str(e)}")
+            raise ValueError(f"API call failed: {str(e)}")
 
     def apply_output_template(
         self, data: Dict[str, Any], template: Optional[str]
@@ -351,3 +389,7 @@ class MCPService:
                     "content": [{"type": "text", "text": f"Tool call failed: {str(e)}"}],
                     "isError": True,
                 }
+
+
+# 全局实例
+mcp_service = MCPService()

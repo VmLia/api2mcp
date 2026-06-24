@@ -1,6 +1,7 @@
 """
 智能API解析服务 - 使用LLM解析API文档
 """
+import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Optional
@@ -428,3 +429,107 @@ class SmartApiParser:
         except Exception as e:
             logger.error(f"LLM parse failed: {e}")
             raise
+
+    async def parse_batch(
+        self,
+        texts: List[str],
+        concurrency: int = 5,
+        stop_on_first_error: bool = False
+    ) -> List[ParseResult]:
+        """
+        批量解析 API 文本
+        
+        Args:
+            texts: API 文档文本列表
+            concurrency: 并发数
+            stop_on_first_error: 是否在第一个错误时停止
+        
+        Returns:
+            解析结果列表
+        """
+        semaphore = asyncio.Semaphore(concurrency)
+        results: List[ParseResult] = []
+        errors: List[Exception] = []
+        
+        async def parse_one(text: str, index: int) -> ParseResult:
+            async with semaphore:
+                try:
+                    return await self.parse_api_text(text)
+                except Exception as e:
+                    logger.error(f"Failed to parse text[{index}]: {e}")
+                    if stop_on_first_error:
+                        raise
+                    errors.append(e)
+                    # 返回空结果
+                    return ParseResult(
+                        mcp_name=f"failed_{index}",
+                        api_fullurl="",
+                        tool_description=f"Parse failed: {str(e)}"
+                    )
+        
+        # 并发执行
+        tasks = [parse_one(text, i) for i, text in enumerate(texts)]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 处理结果
+        final_results = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                if stop_on_first_error:
+                    raise result
+                final_results.append(ParseResult(
+                    mcp_name=f"error_{i}",
+                    api_fullurl="",
+                    tool_description=f"Error: {str(result)}"
+                ))
+            else:
+                final_results.append(result)
+        
+        logger.info(
+            f"Batch parse completed: {len(final_results)} total, "
+            f"{len(errors)} errors"
+        )
+        
+        return final_results
+
+    async def parse_from_openapi_spec(
+        self,
+        spec: Dict[str, Any]
+    ) -> List[ParseResult]:
+        """
+        从 OpenAPI 规范批量解析所有 API
+        
+        Args:
+            spec: OpenAPI 规范字典
+        
+        Returns:
+            解析结果列表
+        """
+        results = []
+        paths = spec.get("paths", {})
+        
+        for path, methods in paths.items():
+            for method, operation in methods.items():
+                if method.upper() not in ["GET", "POST", "PUT", "PATCH", "DELETE"]:
+                    continue
+                
+                # 构建文本描述
+                text = f"""
+{method.upper()} {spec.get("servers", [{}])[0].get("url", "")}{path}
+
+{operation.get("summary", "")}
+{operation.get("description", "")}
+
+Parameters:
+{json.dumps(operation.get("parameters", []), indent=2)}
+
+Request Body:
+{json.dumps(operation.get("requestBody", {}), indent=2)}
+"""
+                try:
+                    result = await self.parse_api_text(text)
+                    results.append(result)
+                except Exception as e:
+                    logger.warning(f"Failed to parse {method} {path}: {e}")
+        
+        return results
