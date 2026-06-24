@@ -11,6 +11,11 @@ const routes: RouteRecordRaw[] = [
     path: '/frontrouter',
     name: 'Api2mcpList',
     component: () => import('@/views/Api2mcpList.vue')
+  },
+  {
+    path: '/frontrouter/status',
+    name: 'ServerStatus',
+    component: () => import('@/views/ServerStatus.vue')
   }
 ]
 

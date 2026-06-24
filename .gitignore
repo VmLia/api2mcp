@@ -7,12 +7,18 @@ __pycache__/
 # Environment
 .env
 
-# Build
+# Build artifacts
 frontend/dist/
+*.egg-info/
 
-# IDE
+# Docker runtime data (DO NOT commit container volumes)
+docker/docker-compose-api2mcp/pgdata/
+docker/docker-compose-api2mcp/redisdata/
+
+# IDE & tools
 .vscode/
 .idea/
+.qoder/
 *.swp
 *.swo
 

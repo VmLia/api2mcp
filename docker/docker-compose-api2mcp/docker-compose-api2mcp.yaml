@@ -15,11 +15,11 @@ services:
       dockerfile: docker/docker-build/Dockerfile
     container_name: api2mcp
     ports:
-      - "34075:34075"  # Frontend
-      - "34085:34085"  # Backend
+      - "${API2MCP_PORT_FRONTEND:-34075}:${API2MCP_PORT_FRONTEND:-34075}"  # Frontend
+      - "${API2MCP_PORT_BACKEND:-34085}:${API2MCP_PORT_BACKEND:-34085}"  # Backend
     environment:
-      - API2MCP_PORT_BACKEND=34085
-      - API2MCP_PORT_FRONTEND=34075
+      - API2MCP_PORT_BACKEND=${API2MCP_PORT_BACKEND:-34085}
+      - API2MCP_PORT_FRONTEND=${API2MCP_PORT_FRONTEND:-34075}
       - DB_TYPE=postgresql
       - DB_HOST=${DB_HOST:-localhost}
       - DB_PORT=${DB_PORT:-5432}

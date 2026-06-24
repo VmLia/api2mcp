@@ -66,16 +66,15 @@ RUN chmod +x /app/entrypoint.sh
 # Set environment variables
 ENV PYTHONPATH=/app/backend/src
 ENV PATH="/app/backend/.venv/bin:$PATH"
-ENV API2MCP_PORT_BACKEND=34085
-ENV API2MCP_PORT_FRONTEND=34075
+# Port configurations are read from .env file at runtime, not hardcoded here
 
-# Expose ports
+# Expose default ports (can be overridden at runtime)
 EXPOSE 34075
 EXPOSE 34085
 
-# Health check
+# Health check (uses BACKEND_PORT environment variable)
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD curl -f http://localhost:34085/health || exit 1
+    CMD curl -f http://localhost:${API2MCP_PORT_BACKEND:-34085}/health || exit 1
 
 # Entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]

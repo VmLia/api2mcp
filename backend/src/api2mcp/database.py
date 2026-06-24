@@ -12,7 +12,9 @@ engine = create_async_engine(
     settings.database_url,
     echo=settings.LOG_LEVEL == "DEBUG",
     pool_size=10,
-    max_overflow=20
+    max_overflow=20,
+    pool_recycle=1800,      # 30分钟回收连接，避免 PostgreSQL 主动断开空闲连接
+    pool_pre_ping=True,     # 使用前检测连接是否有效
 )
 
 

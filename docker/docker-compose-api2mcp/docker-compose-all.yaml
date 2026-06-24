@@ -1,5 +1,5 @@
 # API2MCP All Services
-# 启动所有服务：应用（前后端）+ 数据库依赖
+# 启动所有服务：应用（前后端）+ 数据库依赖（PostgreSQL + Redis）
 # Start: docker compose -f docker-compose-all.yaml up -d
 # Stop: docker compose -f docker-compose-all.yaml down
 
@@ -15,11 +15,12 @@ services:
       dockerfile: docker/docker-build/Dockerfile
     container_name: api2mcp
     ports:
-      - "34075:34075"  # Frontend
-      - "34085:34085"  # Backend
+      - "${API2MCP_PORT_FRONTEND:-34075}:${API2MCP_PORT_FRONTEND:-34075}"  # Frontend
+      - "${API2MCP_PORT_BACKEND:-34085}:${API2MCP_PORT_BACKEND:-34085}"  # Backend
     environment:
-      - API2MCP_PORT_BACKEND=34085
-      - API2MCP_PORT_FRONTEND=34075
+      - API2MCP_HOST=${API2MCP_HOST:-0.0.0.0}
+      - API2MCP_PORT_BACKEND=${API2MCP_PORT_BACKEND:-34085}
+      - API2MCP_PORT_FRONTEND=${API2MCP_PORT_FRONTEND:-34075}
       - DB_TYPE=postgresql
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -27,17 +28,24 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-api2mcp@123}
       - DB_NAME=${DB_NAME:-api2mcp}
       - DB_DRIVER=asyncpg
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-api2mcp@123}
+      - REDIS_DB=0
+      - REDIS_OPTIONAL=false
       - LOG_REQUEST_ENABLED=${LOG_REQUEST_ENABLED:-true}
       - UVICORN_ACCESS_LOG=${UVICORN_ACCESS_LOG:-true}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     networks:
       - api2mcp-network
 
   # ===============================
-  # PostgreSQL Database (External Dependency)
+  # PostgreSQL Database
   # ===============================
   postgres:
     image: pgvector/pgvector:0.7.0-pg15
@@ -60,8 +68,37 @@ services:
     networks:
       - api2mcp-network
 
+  # ===============================
+  # Redis Cache (用于状态管理、缓存、分布式锁)
+  # ===============================
+  redis:
+    image: redis:7-alpine
+    container_name: api2mcp-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-api2mcp@123}
+      --appendonly yes
+      --save 60 1000
+      --rename-command FLUSHDB ""
+      --rename-command FLUSHALL ""
+      --rename-command KEYS ""
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-api2mcp@123}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - api2mcp-network
+
 volumes:
   pgdata:
+  redisdata:
 
 networks:
   api2mcp-network:

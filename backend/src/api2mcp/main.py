@@ -2,6 +2,8 @@
 API2MCP 后端服务主入口
 """
 import logging
+import uuid
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,8 +14,18 @@ from fastapi.responses import FileResponse
 from fastapi.routing import APIRoute
 
 from .config import settings
-from .controller import tool_router, mcp_router
-from .middleware.logging_middleware import LoggingMiddleware
+from .api_registry.routers import tool_router, smart_parser_router
+from .mcp_gateway.routers import mcp_router
+from .mcp_gateway.state import server_state_manager
+from .core import LoggingMiddleware, get_redis_client, close_redis_client
+
+# 添加项目根目录到 Python 路径，确保能导入 init 模块
+_project_root = Path(__file__).resolve().parent.parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+# 数据库表结构初始化模块
+from init.init_db import init_tables
 
 
 # 日志配置
@@ -22,17 +34,69 @@ logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s"
 )
 
+# 服务实例 ID（使用主机名或随机生成）
+SERVER_INSTANCE_ID = str(uuid.uuid4())[:8]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时初始化
     logging.info(f"API2MCP service starting on port: {settings.BACKEND_PORT}")
+    logging.info(f"Server instance ID: {SERVER_INSTANCE_ID}")
+
+    # 数据库表结构初始化（在服务启动时执行）
+    # API2MCP_DB_DEL: 是否删除已存在的表（true=删除重建，false=仅创建缺失的表）
+    try:
+        logging.info(f"Database table initialization starting (drop_existing={settings.API2MCP_DB_DEL})")
+        await init_tables(drop_existing=settings.API2MCP_DB_DEL)
+        logging.info("Database table initialization completed")
+    except Exception as e:
+        logging.error(f"Database table initialization failed: {e}")
+        raise
+
+    # 初始化 Redis 连接（可选）
+    try:
+        redis_client = await get_redis_client()
+        if redis_client:
+            logging.info("Redis connection established")
+        else:
+            logging.warning("Redis connection failed (optional), service will continue without Redis")
+    except Exception as e:
+        if settings.REDIS_OPTIONAL:
+            logging.warning(f"Redis connection failed (optional): {e}, service will continue without Redis")
+        else:
+            logging.error(f"Failed to connect to Redis: {e}")
+            raise
+
+    # 注册服务实例
+    try:
+        await server_state_manager.register_server(
+            server_id=SERVER_INSTANCE_ID,
+            name=f"api2mcp-{SERVER_INSTANCE_ID}"
+        )
+        logging.info("Server registered to state manager")
+    except Exception as e:
+        logging.warning(f"Failed to register server: {e}")
 
     yield
 
     # 关闭时清理
     logging.info("API2MCP service shutting down")
+
+    # 注销服务实例
+    try:
+        await server_state_manager.unregister_server(SERVER_INSTANCE_ID)
+        logging.info("Server unregistered from state manager")
+    except Exception as e:
+        logging.warning(f"Failed to unregister server: {e}")
+
+    # 关闭 Redis 连接
+    try:
+        await close_redis_client()
+        logging.info("Redis connection closed")
+    except Exception as e:
+        logging.warning(f"Failed to close Redis connection: {e}")
 
 
 # 创建 FastAPI 应用
@@ -59,6 +123,7 @@ app.add_middleware(
 
 # 注册路由（API 路由必须在静态文件之前）
 app.include_router(tool_router)  # tool_router 已经包含 /serverapi prefix
+app.include_router(smart_parser_router)  # smart_parser_router 已经包含 /serverapi prefix
 app.include_router(mcp_router)  # mcp_router 已经包含 /mcpapi prefix
 
 
@@ -66,7 +131,18 @@ app.include_router(mcp_router)  # mcp_router 已经包含 /mcpapi prefix
 @app.get("/health", tags=["system"])
 async def health_check():
     """健康检查端点"""
-    return {"status": "healthy", "service": "api2mcp"}
+    return {"status": "healthy", "service": "api2mcp", "instance_id": SERVER_INSTANCE_ID}
+
+
+# 获取服务状态
+@app.get("/server/status", tags=["system"])
+async def get_server_status():
+    """获取服务状态信息"""
+    servers = await server_state_manager.get_all_servers()
+    return {
+        "instance_id": SERVER_INSTANCE_ID,
+        "servers": [server.to_dict() for server in servers]
+    }
 
 
 # ── 前端静态文件服务和路由支持 ──

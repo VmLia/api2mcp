@@ -21,8 +21,8 @@
             <span>Basic Information <span class="required-badge">Required</span></span>
           </template>
           <el-form :model="formData" label-width="140px">
-            <el-form-item label="Tool Name" required>
-              <el-input v-model="formData.tool_name" placeholder="English identifier, e.g. search_projects" />
+            <el-form-item label="MCP Name" required>
+              <el-input v-model="formData.mcp_name" placeholder="English identifier, e.g. search_projects" />
               <div class="form-tip">Used as MCP tool name, only letters, numbers, and underscores allowed</div>
             </el-form-item>
             <el-form-item label="Version">
@@ -348,7 +348,7 @@
           <div v-if="mcpPreview" class="mcp-preview">
             <div class="preview-section">
               <h4>Tool Name</h4>
-              <code>{{ formData.tool_name }}@{{ formData.version }}</code>
+              <code>{{ formData.mcp_name }}@{{ formData.version }}</code>
             </div>
             <div class="preview-section">
               <h4>Description</h4>
@@ -401,7 +401,7 @@
               <code>{{ mcpToolUrl }}</code>
               <el-button size="small" text @click="copyMcpUrl(mcpToolUrl)">Copy</el-button>
             </div>
-            <div class="url-desc">Exposes only current tool, format: /mcpapi/{tool_name}/{version}</div>
+            <div class="url-desc">Exposes only current tool, format: /mcpapi/{mcp_name}/{version}</div>
           </div>
 
           <!-- Transport Protocol Display -->
@@ -523,15 +523,15 @@ const fieldForm = ref({
 
 // Form Data
 const formData = ref<any>({
-  tool_name: '',
+  mcp_name: '',
   version: 'v1',
   tool_description: '',
   category: '',
   tags: [],
   method: 'GET',
-  base_url: '',
-  path: '/',
+  api_fullurl: '',
   content_type: 'application/json',
+  mcp_fullurl: '',
   auth_config_id: null,
   timeout_ms: 30000,
   cache_ttl: 0,
@@ -542,40 +542,11 @@ const formData = ref<any>({
   transport_modes: ['streamable_http'],
 })
 
-// Full URL computed property - combines base_url and path
+// Full URL computed property - directly binds to api_fullurl
 const fullUrl = computed({
-  get: () => {
-    const base = formData.value.base_url || ''
-    const path = formData.value.path || ''
-    if (!base) return path
-    if (!path || path === '/') return base
-    // Remove trailing slash from base and leading slash from path if needed
-    const baseWithoutSlash = base.replace(/\/$/, '')
-    const pathWithSlash = path.startsWith('/') ? path : `/${path}`
-    return `${baseWithoutSlash}${pathWithSlash}`
-  },
+  get: () => formData.value.api_fullurl || '',
   set: (val: string) => {
-    if (!val) {
-      formData.value.base_url = ''
-      formData.value.path = '/'
-      return
-    }
-    
-    try {
-      const url = new URL(val)
-      formData.value.base_url = `${url.protocol}//${url.host}`
-      formData.value.path = url.pathname + url.search || '/'
-    } catch {
-      // Fallback for invalid URLs
-      const match = val.match(/^https?:\/\/[^\/]+/)
-      if (match) {
-        formData.value.base_url = match[0]
-        formData.value.path = val.slice(match[0].length) || '/'
-      } else {
-        formData.value.base_url = ''
-        formData.value.path = val || '/'
-      }
-    }
+    formData.value.api_fullurl = val
   }
 })
 
@@ -595,9 +566,9 @@ const mcpBaseUrl = computed(() => {
 
 const mcpToolUrl = computed(() => {
   const base = import.meta.env.VITE_API_URL || window.location.origin
-  const toolName = formData.value.tool_name || 'your_tool_name'
+  const mcpName = formData.value.mcp_name || 'your_mcp_name'
   const version = formData.value.version || 'v1'
-  return `${base}/mcpapi/${toolName}/${version}`
+  return `${base}/mcpapi/${mcpName}/${version}`
 })
 
 // Copy URL to clipboard
@@ -662,7 +633,7 @@ const saveParam = async () => {
   // If tool not created yet, user needs to go through step 0 first
   if (!isEdit.value && !currentToolId) {
     // Validate all required fields and create tool
-    if (!formData.value.tool_name) {
+    if (!formData.value.mcp_name) {
       ElMessage.warning('Please fill in tool name first')
       return
     }
@@ -806,7 +777,7 @@ const nextStep = async () => {
   // Step validation
   // Step 0 -> Step 1: Validate all required fields and create tool if new
   if (currentStep.value === 0) {
-    if (!formData.value.tool_name) {
+    if (!formData.value.mcp_name) {
       ElMessage.warning('Please fill in tool name first')
       return
     }
@@ -859,12 +830,12 @@ const nextStep = async () => {
 }
 
 const saveProject = async (closeAfterSave: boolean = false) => {
-  if (!formData.value.tool_name) {
-    ElMessage.warning('Please fill in tool name')
+  if (!formData.value.mcp_name) {
+    ElMessage.warning('Please fill in MCP name')
     return
   }
-  if (!formData.value.base_url) {
-    ElMessage.warning('Please fill in Base URL')
+  if (!formData.value.api_fullurl) {
+    ElMessage.warning('Please fill in API URL')
     return
   }
 
@@ -904,7 +875,60 @@ const loadData = async () => {
       await loadParameters(toolId.value)
       await refreshPreview()
     }
+  } else {
+    // 检查是否有智能解析结果需要应用
+    const parseResult = store.getParseResult()
+    if (parseResult) {
+      applyParseResult(parseResult)
+    }
   }
+}
+
+const applyParseResult = (result: any) => {
+  // 应用基本信息
+  if (result.mcp_name) {
+    formData.value.mcp_name = result.mcp_name
+  }
+  if (result.method) {
+    formData.value.method = result.method
+  }
+  if (result.api_fullurl) {
+    formData.value.api_fullurl = result.api_fullurl
+  }
+  if (result.tool_description) {
+    formData.value.tool_description = result.tool_description
+  }
+  
+  // 应用参数
+  if (result.parameters && result.parameters.length > 0) {
+    parameters.value = result.parameters.map((param: any, index: number) => ({
+      id: `param_${Date.now()}_${index}`,
+      param_name: param.param_name || '',
+      param_type: param.param_type || 'string',
+      param_location: param.param_location || 'query',
+      required: param.required || false,
+      description: param.description || '',
+      item_type: null,
+      default_value: '',
+      example_value: '',
+      unit: '',
+      semantic_tag: '',
+      parent_id: null,
+      sort_order: index,
+    }))
+  }
+  
+  // 应用输出字段
+  if (result.output_fields && typeof result.output_fields === 'object') {
+    formData.value.output_fields = { ...result.output_fields }
+  }
+  
+  // 应用输出模板（JMESPath）
+  if (result.output_template) {
+    formData.value.output_template = result.output_template
+  }
+  
+  ElMessage.success('智能解析结果已应用到表单')
 }
 
 const resetForm = () => {
@@ -912,15 +936,15 @@ const resetForm = () => {
   mcpPreview.value = null
   parameters.value = []
   formData.value = {
-    tool_name: '',
+    mcp_name: '',
     version: 'v1',
     tool_description: '',
     category: '',
     tags: [],
     method: 'GET',
-    base_url: '',
-    path: '/',
+    api_fullurl: '',
     content_type: 'application/json',
+    mcp_fullurl: '',
     auth_config_id: null,
     timeout_ms: 30000,
     cache_ttl: 0,
